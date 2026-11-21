@@ -149,13 +149,27 @@ function startJourney(clinic) {
 // atualiza as rotinas de uma jornada já iniciada: só daqui para frente, sem mexer no que foi feito nem nas reuniões
 function realignWeekends(clinic) {
   const today = todayStr(); let n = 0;
-  S.tasks.forEach((t) => { if (t.clinicId === clinic.id && t.status !== 'concluido' && t.due >= today) { const d = workday(clinic, t.month, t.due); if (d !== t.due) { t.due = d; n++; } } });
+  S.tasks.forEach((t) => {
+    if (t.clinicId !== clinic.id || t.status === 'concluido' || t.due < today) return;
+    let d = workday(clinic, t.month, t.due);
+    if (d < today) { d = t.due; while ([0, 6].includes(parseD(d).getDay())) d = addDays(d, 1); } // não joga para o passado
+    if (d !== t.due) { t.due = d; n++; }
+  });
   return n;
 }
 function refreshRoutines(clinic) {
   if (!clinic.journey) return 0;
   const today = todayStr();
-  S.tasks = S.tasks.filter((t) => !(t.clinicId === clinic.id && t.kind === 'rotina' && !t.meeting && !t.custom && t.status === 'a_fazer' && t.due >= today));
+  const cur = currentMonth(clinic);
+  // títulos de rotina válidos em cada mês, pelo modelo atual
+  const allowed = (n) => new Set(genRoutines(clinic, n, null, false).map((t) => t.title));
+  const okCur = cur >= 1 && cur <= 12 ? allowed(cur) : new Set();
+  S.tasks = S.tasks.filter((t) => {
+    if (t.clinicId !== clinic.id || t.kind !== 'rotina' || t.meeting || t.custom || t.status !== 'a_fazer') return true;
+    if (t.due >= today) return false; // futuras: serão recriadas
+    if (t.month === cur && !okCur.has(t.title)) return false; // antigas do mês atual que não existem mais no modelo
+    return true;
+  });
   let added = 0;
   for (let n = 1; n <= 12; n++) { if (monthEnd(clinic, n) < today) continue; const list = genRoutines(clinic, n, today, false); S.tasks.push(...list); added += list.length; }
   realignWeekends(clinic);

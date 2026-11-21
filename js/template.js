@@ -135,18 +135,18 @@ const MONTHS = [
 // skip: meses em que a rotina não entra; alt: título alternativo nos meses 11–12 (mídia pausada por padrão)
 const ROUTINES = [
   { t: 'Planejar a campanha do mês (oferta, público e orçamento)', p: 'M', o: 'Tiago', d: 1, h: 1, skip: [1], alt: 'Planejar a campanha de base (ou mídia, se mantida)' },
-  { t: 'Calendário editorial do mês', p: 'B', o: 'Micaela', d: 2, h: 1 },
+  { t: 'Calendário editorial do mês', p: 'B', o: 'Micaela', d: 2, h: 1, skip: [1] }, // mês 1 tem ofertas e calendário inicial
   { t: 'Roteiros dos criativos e envio à clínica', p: 'B', o: 'Micaela', d: 2, h: 1.5 },
   { t: 'Cobrar e receber as gravações da clínica', p: 'B', o: 'Micaela', d: 5, h: 0.25 },
   { t: 'Reunião 1 — Estratégia e resultados (60 min)', p: 'M', o: 'Tiago', d: 7, meeting: true, h: 1 },
   { t: 'Editar vídeos e artes do mês', p: 'B', o: 'Micaela', d: 8, h: 1.5 },
   { t: 'Aprovar os criativos com a clínica', p: 'B', o: 'Micaela', d: 9, h: 0.5 },
   { t: 'Subir a campanha e os anúncios novos', p: 'M', o: 'Tiago', d: 10, h: 1, skip: [1], alt: 'Campanha de base: follow-up e reativação no ar' },
-  { t: 'Manutenção dos fluxos 24AGÁ', p: 'C', o: 'Tiago', d: 10, h: 1 },
+  { t: 'Manutenção dos fluxos 24AGÁ', p: 'C', o: 'Tiago', d: 10, h: 1, skip: [1] }, // mês 1 tem a implantação
   { t: 'Trocar os criativos que cansaram', p: 'M', o: 'Tiago', d: 20, h: 0.5 },
   { t: 'Reunião 2 — Treinamento comercial e conversão (60 min)', p: 'C', o: 'Tiago', d: 21, meeting: true, h: 1 },
   { t: 'Analisar o mês e separar os números', p: 'M', o: 'Micaela', d: 25, h: 1 },
-  { t: 'Relatório mensal (revisado por Tiago)', p: 'M', o: 'Tiago', d: 28, h: 1.5 },
+  { t: 'Relatório mensal (revisado por Tiago)', p: 'M', o: 'Tiago', d: 28, h: 1.5, skip: [1] }, // mês 1 tem o primeiro relatório
 ];
 // Rotinas semanais (toda segunda-feira do mês)
 const WEEKLY = [
