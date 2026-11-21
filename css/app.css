@@ -1213,3 +1213,7 @@ details.card > summary { cursor: pointer; }
   .cron:not(.cm) td::before { content: attr(data-l); position: absolute; left: 0; top: 5px; width: 96px; font-size: 10.5px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .03em; }
   .cron:not(.cm) .ci { white-space: normal; }
 }
+.plan-ctl { border-left: 4px solid var(--accent); } .plan-ctl > header { flex-wrap: wrap; gap: 4px 12px; }
+.plan-ctl .pc-msg { margin: 4px 0 12px; line-height: 1.5; } .plan-ctl .late { color: var(--bad); } .plan-ctl .okc { color: var(--ok); }
+.pc-btns { flex-wrap: wrap; gap: 8px; } .danger-t { color: var(--bad) !important; }
+@media (max-width: 640px) { .pc-btns .btn { flex: 1 1 100%; } }

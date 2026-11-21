@@ -62,7 +62,7 @@ async function genPlan(reason) {
   });
   if (waves.length) { for (let d = waves[0].ads; d <= waves[waves.length - 1].last; d = addDays(d, 1)) { const act = waves.filter((w) => w.ads <= d && d <= w.last); act.forEach((w) => (w.budget += cfg.budgetDay / act.length)); } }
   waves.forEach((w) => (w.budget = Math.round(w.budget)));
-  const old = S.plan; const v = (old ? old.v : 0) + 1;
+  const old = S.plan; const v = (old ? old.v : 0) + 1; if (old) S.planPrev = JSON.parse(JSON.stringify(old));
   if (old) { S.planHist = [{ v: old.v, at: old.createdAt, by: old.by, waves: old.waves.length, end: (old.waves[old.waves.length - 1] || {}).last, note: old.reason || '' }, ...(S.planHist || [])].slice(0, 12);
     old.waves.forEach((w) => { const nw = waves.find((x) => x.uf === w.uf && Object.keys(x.regions).join() === Object.keys(w.regions).join()); if (nw && w.spent) nw.spent = w.spent; }); }
   S.plan = { v, createdAt: new Date().toISOString(), by: S.me, reason: reason || 'Plano gerado', cfg, total: waves.reduce((a, w) => a + w.n, 0), done0: done.size, waves };
@@ -103,6 +103,27 @@ async function autoReplan() {
   const did = touchedSet().size - (p.done0 || 0); p.lastAuto = t;
   if (exp - did >= dailyCap(p.cfg)) { await genPlan(`Replanejado sozinho: ${exp - did} contatos atrasados passaram para os próximos dias`); toast('Plano replanejado pelo ritmo real'); return true; }
   save(); return false;
+}
+
+// ritmo: previsto até ontem x feito desde que o plano foi gerado
+function planPace() {
+  const p = S.plan; if (!p || !p.waves.length) return null; const t = todayStr(); const cap = dailyCap(p.cfg);
+  let exp = 0; for (let d = p.waves[0].first; d < t; d = nextWork(addDays(d, 1), p.cfg)) if (isWorkday(d, p.cfg)) exp += cap;
+  const did = Math.max(0, touchedSet().size - (p.done0 || 0)); return { exp, did, diff: did - exp, cap };
+}
+function planCtlHTML() {
+  const p = S.plan; const pc = planPace(); const t = todayStr(); const blockedToday = (p.cfg.blocked || []).includes(t);
+  let msg;
+  if (!pc || !pc.exp) msg = `<b>Ainda não começou.</b> As ligações começam em ${fmtShort(p.waves[0].first)}. Se precisar mudar a data, as metas ou a verba, use “Mudar datas e metas”.`;
+  else if (pc.diff <= -pc.cap * 0.5) msg = `<b class="late">Atrasados ${(-pc.diff).toLocaleString('pt-BR')} contatos</b> (previsto ${pc.exp.toLocaleString('pt-BR')} até ontem, feitos ${pc.did.toLocaleString('pt-BR')}). Recalcule para empurrar o que faltou para os próximos dias.`;
+  else if (pc.diff >= pc.cap * 0.5) msg = `<b class="okc">Adiantados ${pc.diff.toLocaleString('pt-BR')} contatos</b> (previsto ${pc.exp.toLocaleString('pt-BR')}, feitos ${pc.did.toLocaleString('pt-BR')}). Recalcule para puxar as próximas ondas para frente.`;
+  else msg = `<b class="okc">No ritmo</b>: previsto ${pc.exp.toLocaleString('pt-BR')} até ontem, feitos ${pc.did.toLocaleString('pt-BR')}.`;
+  return `<section class="card plan-ctl"><header><h3>Ajustar o plano</h3><small class="muted">versão ${p.v} · ${esc(p.reason || '')} · ${new Date(p.createdAt).toLocaleDateString('pt-BR')}</small></header>
+    <p class="pc-msg">${msg}</p>
+    <div class="btns pc-btns"><button class="btn primary" data-act="planRe">↻ Recalcular a partir de hoje</button><button class="btn" data-act="planEdit">✎ Mudar datas e metas</button>
+      ${isWorkday(t, p.cfg) || blockedToday ? `<button class="btn" data-act="planSkipToday">${blockedToday ? '↩ Hoje vamos prospectar' : '⏸ Hoje não vamos prospectar'}</button>` : ''}
+      ${S.planPrev ? `<button class="btn ghost" data-act="planUndo">⤺ Desfazer (voltar à v${S.planPrev.v})</button>` : ''}<button class="btn ghost danger-t" data-act="planReset">Recriar do zero</button></div>
+    <p class="hint">Recalcular mantém tudo o que vocês já fizeram e redistribui só o que falta, a partir de hoje. Nada da base é apagado.</p></section>`;
 }
 
 // ---------- tarefas das próximas 3 ondas ----------
@@ -242,7 +263,7 @@ const dm = (d) => (d ? d.slice(8, 10) + '/' + d.slice(5, 7) : '—');
 VIEWS.plano = () => {
   const p = S.plan; const cfg = p ? p.cfg : planCfg(); const t = todayStr();
   if (!Sync.enabled()) { view().innerHTML = `<div class="notice">O plano usa a base de leads do seu repositório privado. Conecte a sincronização em <a href="#/config">Configurações</a>.</div>`; return; }
-  const cfgForm = `<details class="card plan-cfg" ${p ? '' : 'open'}><summary><b>Configurar o plano</b> <small class="muted">metas, verba, classes e datas</small></summary>
+  const cfgForm = `<details class="card plan-cfg" id="planCfg" ${p && !ui.planEdit ? '' : 'open'}><summary><b>Configurar o plano</b> <small class="muted">metas, verba, classes e datas</small></summary>
     <form data-form="planCfg" class="mform">
       <label><span>Começar as ligações em</span><input type="date" name="start" value="${cfg.start}"></label>
       <label><span>Verba de anúncios por dia (total)</span><input type="number" min="0" step="1" name="budgetDay" value="${cfg.budgetDay}"></label>
@@ -252,10 +273,11 @@ VIEWS.plano = () => {
       <label><span>Aquecimento antes das ligações (dias)</span><input type="number" min="0" max="14" name="adsLead" value="${cfg.adsLead}"></label>
       <label><span>Dias úteis por onda</span><input type="number" min="1" max="15" name="waveDays" value="${cfg.waveDays}"></label>
       <label><span>Diagnósticos por dia (Tiago)</span><input type="number" min="1" max="10" name="diagSlots" value="${cfg.diagSlots}"></label>
+      <label class="full"><span>Ordem dos estados (o primeiro é trabalhado antes)</span><input name="order" value="${esc(cfg.order.join(', '))}" placeholder="MT, GO, MS, MG, PR, SC"></label>
       <div class="full"><span class="lbl2">Classes no plano</span><div class="chips">${Object.entries(TIERS).map(([k, l]) => `<label class="chip ${cfg.tiers.includes(k) ? 'on' : ''}"><input type="checkbox" name="tier" value="${k}" ${cfg.tiers.includes(k) ? 'checked' : ''} hidden>${k} · ${l}</label>`).join('')}</div></div>
-      <label class="full"><span>Dias sem prospecção (feriados municipais, folgas) — um por linha, ex.: 2026-12-24</span><textarea name="blocked" rows="2">${esc((cfg.blocked || []).join('\n'))}</textarea></label>
+      <label class="full"><span>Dias sem prospecção (feriados municipais, folgas, viagens) — um por linha, ex.: 24/12/2026</span><textarea name="blocked" rows="2">${esc((cfg.blocked || []).map((x) => x.split('-').reverse().join('/')).join('\n'))}</textarea></label>
       <div class="btns end"><button class="btn primary">${p ? 'Salvar e replanejar' : 'Gerar o plano'}</button></div>
-    </form><p class="hint">Feriados nacionais e fins de semana já ficam de fora. A ordem dos estados é MT → GO → MS → MG → PR → SC, cidades maiores primeiro.</p></details>`;
+    </form><p class="hint">Feriados nacionais e fins de semana já ficam de fora. Dentro de cada estado, as regiões e cidades maiores vêm primeiro. Ao salvar, o plano é recalculado a partir de hoje, sem perder o que já foi feito.</p></details>`;
   if (!p) {
     view().innerHTML = `<section class="card plan-loading"><h3>Montando o plano de campanhas…</h3><p class="muted">Carregando os 6 estados e calculando ondas, cidades, datas e verba. Leva alguns segundos.</p><div class="bar"><i class="indet"></i></div></section>${cfgForm}`;
     if (!ui.planBusy) { ui.planBusy = true; genPlan('Plano inicial').then(() => { ui.planBusy = false; if (route.name === 'plano') render(); toast('Plano de campanhas pronto'); }).catch((er) => { ui.planBusy = false; const b = $('.plan-loading'); if (b) b.innerHTML = `<div class="notice warn">Não consegui montar o plano: ${esc(er.message)}. Confira a sincronização e tente de novo em “Configurar o plano”.</div>`; }); }
@@ -271,6 +293,7 @@ VIEWS.plano = () => {
       <div class="kpi"><span>Executado</span><b>${Math.max(0, totDone).toLocaleString('pt-BR')}</b><em>${p.total ? Math.round((Math.max(0, totDone) / p.total) * 100) : 0}% das clínicas do plano</em></div>
       <div class="kpi"><span>Verba de anúncios</span><b>${money(budSpent)}</b><em>gasto de ${money(budPlan)} previstos · ${money(cfg.budgetDay)}/dia</em></div>
     </div>
+    ${planCtlHTML()}
     ${goalsHTML()}
     ${cronHTML()}
     ${cur ? `<section class="card wave-now"><header><h3>${waveStatus(cur)[0] === 'ativa' ? 'Agora' : 'Próxima'}: Onda ${cur.i} · ${cur.uf}</h3><span class="btns" style="margin:0"><button class="btn primary" data-act="quotaStart">▶ Minha cota de hoje</button><button class="btn" data-act="planRe">Replanejar</button></span></header>

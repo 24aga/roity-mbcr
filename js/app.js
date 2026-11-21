@@ -1229,7 +1229,14 @@ document.addEventListener('click', (e) => {
     },
     impOpen: () => importForm(),
     quotaStart: () => startQuota(),
-    planRe: async () => { toast('Replanejando…'); await genPlan('Replanejado manualmente'); render(); toast('Plano replanejado'); },
+    planRe: async () => { const b = a; if (b.tagName === 'BUTTON') { b.disabled = true; b.textContent = 'Recalculando…'; } try { await genPlan('Recalculado a partir de hoje'); toast('Plano recalculado'); } catch (er) { alert('Não consegui recalcular: ' + er.message); } render(); },
+    planEdit: () => { ui.planEdit = true; render(); const f = $('#planCfg'); if (f) { f.open = true; f.scrollIntoView({ behavior: 'smooth', block: 'start' }); setTimeout(() => f.querySelector('[name="start"]')?.focus(), 350); } ui.planEdit = false; },
+    planSkipToday: async () => { const t = todayStr(); const c = { ...(S.settings.plan || {}) }; const bl = new Set(c.blocked || []); const off = bl.has(t); off ? bl.delete(t) : bl.add(t); c.blocked = [...bl].sort(); S.settings.plan = c;
+      toast('Recalculando…'); try { await genPlan(off ? 'Hoje voltou a ter prospecção' : 'Hoje sem prospecção — empurrado para os próximos dias'); toast(off ? 'Hoje voltou para o plano' : 'Hoje ficou livre; o plano andou um dia'); } catch (er) { alert('Não consegui recalcular: ' + er.message); } render(); },
+    planUndo: () => { const pv = S.planPrev; if (!pv || !confirm(`Voltar para a versão ${pv.v} do plano (${pv.reason || ''})?`)) return;
+      S.planHist = (S.planHist || []).filter((h) => h.v !== pv.v); S.plan = pv; S.planPrev = null; S.settings.plan = { ...pv.cfg }; syncPlanTasks(); log(`Plano de campanhas: voltou para a v${pv.v}`); saveNow(); render(); toast(`Voltou para a versão ${pv.v}`); },
+    planReset: async () => { if (!confirm('Recriar o plano do zero?\n\nAs configurações voltam ao padrão (100 + 100 contatos/dia, R$ 40/dia, classes A+B, MT → SC) e as ondas são montadas de novo a partir de hoje.\n\nO que vocês já fizeram continua registrado e não volta para a fila. Dá para desfazer.')) return;
+      const keep = (S.settings.plan || {}).blocked || []; S.settings.plan = { blocked: keep }; toast('Recriando…'); try { await genPlan('Recriado do zero'); toast('Plano recriado'); } catch (er) { alert('Não consegui recriar: ' + er.message); } render(); },
     waveView: () => { ui.waveView = d.v; render(); },
     cron: () => { ui.cron = d.v; render(); },
     cronNav: () => { const t = todayStr(); ui.cronYm = +d.d === 0 ? t.slice(0, 7) : addMonths((ui.cronYm || t.slice(0, 7)) + '-01', +d.d).slice(0, 7); render(); },
@@ -1397,9 +1404,10 @@ document.addEventListener('submit', (e) => {
   } else if (kind === 'planCfg') {
     const tiers = fd.getAll('tier'); if (!tiers.length) { alert('Escolha pelo menos uma classe.'); return; }
     S.settings.plan = { ...(S.settings.plan || {}), start: g('start') || '2026-11-27', budgetDay: n('budgetDay') ?? 40, perDay: { Tiago: n('pT') ?? 100, Micaela: n('pM') ?? 100 }, callsPer: n('callsPer') ?? 30,
-      adsLead: n('adsLead') ?? 4, waveDays: n('waveDays') || 5, diagSlots: n('diagSlots') || 3, tiers, blocked: g('blocked').split(/\s+/).filter((x) => /^\d{4}-\d{2}-\d{2}$/.test(x)) };
+      adsLead: n('adsLead') ?? 4, waveDays: n('waveDays') || 5, diagSlots: n('diagSlots') || 3, tiers, blocked: [...new Set(g('blocked').split(/[\s,;]+/).map((x) => { const m = x.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/); return m ? `${m[3]}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}` : x; }).filter((x) => /^\d{4}-\d{2}-\d{2}$/.test(x)))].sort(),
+      order: (() => { const all = ['MT', 'GO', 'MS', 'MG', 'PR', 'SC']; const o = [...new Set(g('order').toUpperCase().split(/[^A-Z]+/).filter((x) => all.includes(x)))]; return o.length ? [...o, ...all.filter((x) => !o.includes(x))] : all; })() };
     const btn = f.querySelector('.btn.primary'); btn.disabled = true; btn.textContent = 'Calculando… (carrega os 6 estados)';
-    genPlan(S.plan ? 'Configuração alterada' : 'Plano inicial').then(() => { render(); toast('Plano pronto'); }).catch((er) => { alert('Não consegui gerar: ' + er.message); render(); });
+    genPlan(S.plan ? 'Datas ou metas alteradas' : 'Plano inicial').then(() => { render(); toast('Plano pronto'); }).catch((er) => { alert('Não consegui gerar: ' + er.message); render(); });
   } else if (kind === 'pin') {
     const v = g('pin'); if (!/^\d{4,8}$/.test(v)) { alert('Use de 4 a 8 números.'); return; }
     pinHash(v).then((h) => { try { localStorage.setItem(PIN_KEY, h); sessionStorage.setItem('roity-unlocked', '1'); } catch (er) {} render(); toast('Código ativado neste aparelho'); });
