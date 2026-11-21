@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Roity MBCR</title>
+  <meta name="description" content="Gestão da assessoria Roity e da jornada MBCR das clínicas.">
+  <meta name="theme-color" content="#15171c">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Roity MBCR">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon-192.png">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+  <div class="app">
+    <aside class="side">
+      <div class="brand"><span class="logo" aria-hidden="true">R</span><div><b>Roity</b><small>MBCR Control</small></div></div>
+      <nav id="nav" aria-label="Principal"></nav>
+    </aside>
+    <div class="main">
+      <header class="top">
+        <div class="brand-m"><span class="logo" aria-hidden="true">R</span></div>
+        <h1 id="topTitle">Visão geral</h1>
+        <button class="btn primary sm" id="quickAdd">+ Clínica</button>
+      </header>
+      <main id="view" tabindex="-1"></main>
+    </div>
+  </div>
+  <nav id="bottomNav" class="bottom" aria-label="Navegação"></nav>
+  <div id="moreSheet" class="more" hidden></div>
+  <div id="scrim" class="scrim" hidden></div>
+  <aside id="panel" class="panel" aria-label="Detalhes">
+    <button id="panelClose" class="pclose" aria-label="Fechar painel">×</button>
+    <div id="panelBody"></div>
+  </aside>
+  <dialog id="modal"><div id="modalBody"></div></dialog>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <script src="js/template.js"></script>
+  <script src="js/store.js"></script>
+  <script src="js/map.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
