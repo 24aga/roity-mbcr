@@ -158,6 +158,12 @@ function realignWeekends(clinic) {
   });
   return n;
 }
+// atualiza sozinho as jornadas criadas antes do ciclo de campanha (roda uma vez por clínica)
+function migrateRoutines() {
+  const old = S.clinics.filter((c) => c.journey && c.journey.routinesV !== 2);
+  if (!old.length) return 0;
+  old.forEach((c) => refreshRoutines(c)); saveNow(); return old.length;
+}
 function refreshRoutines(clinic) {
   if (!clinic.journey) return 0;
   const today = todayStr();

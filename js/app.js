@@ -1153,6 +1153,7 @@ function renderSearch(q) {
     + sec('Propostas', pr.slice(0, 5).map(([c, p]) => `<a class="s-item" href="#/proposta/${c.id}/${p.id}" data-s="1">${icon('financeiro')}<span><b>${esc(p.title || 'Proposta')} — ${esc(c.name)}</b><small>${fmtDate(p.date)} · ${{ enviada: 'Enviada', aceita: 'Aceita' }[p.status] || 'Rascunho'}</small></span></a>`));
   box.innerHTML = html || `<p class="hint s-hint">Nada encontrado para “${esc(q)}”.</p>`;
 }
+function afterStart() { const n = migrateRoutines(); if (n) { toast(`Rotinas atualizadas em ${pl(n, 'clínica', 'clínicas')}`); const y = $('.main').scrollTop; render(); $('.main').scrollTop = y; } }
 function isDark() { const t = S.settings.theme; return t === 'dark' || (t === 'auto' && matchMedia('(prefers-color-scheme: dark)').matches); }
 function applyTheme() {
   const t = S.settings.theme; const root = document.documentElement;

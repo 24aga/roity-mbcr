@@ -540,7 +540,7 @@ function callItems() {
   if (!ui.callCity) return backs;
   const { uf, city } = ui.callCity; const st = Pool.data[uf]; if (!st) return backs;
   const f = pf(); const wm = workedMap();
-  const cityBacks = backs.filter((x) => x.c.city === city && x.c.uf === uf);
+  const cityBacks = backs.filter((x) => x.c.city === city && x.c.uf === uf && touched(x.c));
   const fresh = st.obj.rows.filter((r) => r[5] === city && inProfile(r, f) && !touched(wm.get(r[0])) && !skip.has(r[0])).sort((a, b) => rowScore(b) - rowScore(a)).map((r) => ({ r, uf, key: r[0] }));
   return [...cityBacks, ...fresh];
 }

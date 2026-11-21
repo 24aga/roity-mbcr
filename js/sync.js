@@ -105,8 +105,8 @@ const Sync = {
   disconnect() { localStorage.removeItem(SYNC_TOKEN_KEY); this.setMeta({ sha: null, syncedAt: null, dirty: false }); this.set('off'); },
 
   start() {
-    if (!this.enabled()) { this.set('off'); return; }
-    this.pull();
+    if (!this.enabled()) { this.set('off'); if (typeof afterStart === 'function') afterStart(); return; }
+    this.pull().then(() => { if (typeof afterStart === 'function') afterStart(); });
     document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') this.pull(); });
     addEventListener('online', () => this.pull());
     setInterval(() => { if (document.visibilityState === 'visible' && !this.meta().dirty) this.pull(); }, 30000);
