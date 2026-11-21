@@ -32,6 +32,7 @@ const ICONS = {
   financeiro: '<rect x="2.5" y="5.5" width="19" height="14" rx="3"/><path d="M2.5 10h19M16.5 15h2"/>',
   config: '<path d="M4 6.5h9M17 6.5h3M4 12h3M11 12h9M4 17.5h11M19 17.5h1"/><circle cx="15" cy="6.5" r="2"/><circle cx="9" cy="12" r="2"/><circle cx="17" cy="17.5" r="2"/>',
   mais: '<circle cx="5" cy="12" r="1.3"/><circle cx="12" cy="12" r="1.3"/><circle cx="19" cy="12" r="1.3"/>',
+  leads: '<path d="M5 4h3.5l1.8 4.4-2.3 1.4a11 11 0 0 0 5.2 5.2l1.4-2.3L19 14.5V18a2 2 0 0 1-2 2A15 15 0 0 1 3 6a2 2 0 0 1 2-2z"/>',
   plus: '<path d="M12 5v14M5 12h14"/>',
   search: '<circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/>',
   sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.3 5.3l1.4 1.4M17.3 17.3l1.4 1.4M5.3 18.7l1.4-1.4M17.3 6.7l1.4-1.4"/>',
@@ -45,7 +46,7 @@ const icon = (n, cls = '') => `<svg class="ic ${cls}" viewBox="0 0 24 24" fill="
 
 // ================= roteamento =================
 const NAV = [
-  ['visao', 'Visão geral', '◧'], ['mapa', 'Mapa MBCR', '✳'], ['clinicas', 'Clínicas', '⌂'], ['tarefas', 'Tarefas', '☑'],
+  ['visao', 'Visão geral', '◧'], ['mapa', 'Mapa MBCR', '✳'], ['clinicas', 'Clínicas', '⌂'], ['leads', 'Prospecção', ''], ['tarefas', 'Tarefas', '☑'],
   ['calendario', 'Calendário', ''], ['criativos', 'Criativos', ''], ['apresentar', 'Apresentar ao cliente', ''],
   ['financeiro', 'Financeiro', 'R$'], ['config', 'Configurações', '⚙'],
 ];
@@ -208,9 +209,11 @@ function meuDiaHTML() {
     return `<div class="md-b${live}"><header><span class="md-time">${b.range[0]}–${b.range[1]}</span><h4>Prospecção ativa</h4>
         <button class="md-done ${rec.prospDone ? 'on' : ''}" data-act="prospDone" aria-pressed="${rec.prospDone}">${rec.prospDone ? '✓ Feita' : 'Marcar 2h feitas'}</button></header>
       <div class="cnts">${counter('calls', 'Ligações', g.calls)}${counter('convos', 'Conversas', g.convos)}${counter('pres', 'Apresentações', g.pres)}</div>
-      <div class="md-sub"><b>Retornos de hoje</b><button class="btn sm" data-act="leadNew">+ Lead</button></div>
-      ${backs.length ? `<ul class="backs">${backs.map((c) => `<li><span><b>${esc(c.name)}</b><small>${esc(c.nextAction || 'Retornar contato')}${c.nextDate < today ? ` · <em>desde ${fmtShort(c.nextDate)}</em>` : ''}</small></span>
-        <span class="btns" style="margin:0">${c.phone ? `<a class="btn sm" href="tel:${esc(c.phone.replace(/[^\\d+]/g, ''))}">Ligar</a>` : ''}<button class="btn sm primary" data-act="leadContact" data-id="${c.id}">Registrar</button></span></li>`).join('')}</ul>` : `<p class="muted md-empty">Nenhum retorno marcado para hoje. Use “+ Lead” para cadastrar quem você ligar.</p>`}
+      <div class="md-sub"><b>Fila de hoje: ${backs.length}</b><span class="btns" style="margin:0"><button class="btn sm" data-act="impOpen">Importar</button><button class="btn sm" data-act="leadNew">+ Lead</button></span></div>
+      ${backs.length ? `<button class="btn primary block-call" data-act="callStart">▶ Começar Modo ligação</button>
+      <ul class="backs">${backs.slice(0, 4).map((c) => `<li><span><b>${esc(c.name)}</b><small>${esc([c.city, c.nextAction || 'Retornar contato'].filter(Boolean).join(' · '))}${c.nextDate < today ? ` · <em>desde ${fmtShort(c.nextDate)}</em>` : ''}</small></span>
+        <span class="btns" style="margin:0"><button class="btn sm" data-act="leadContact" data-id="${c.id}">Registrar</button></span></li>`).join('')}</ul>${backs.length > 4 ? `<a class="md-link" href="#/leads">Ver a fila inteira (${backs.length}) →</a>` : ''}`
+      : `<p class="muted md-empty">Fila vazia. Importe uma lista (Kenai, Excel) ou cadastre um lead.</p>`}
       <small class="muted">Semana: ${pl(wk.calls, 'ligação', 'ligações')} · ${pl(wk.convos, 'conversa', 'conversas')} · ${pl(wk.pres, 'apresentação', 'apresentações')}</small></div>`;
   };
   return `<section class="md">
@@ -465,8 +468,10 @@ VIEWS.clinicas = () => {
       <span class="btns" style="margin:0"><button class="btn" data-act="leadNew">+ Lead rápido</button><button class="btn primary" data-act="newClinic">+ Nova clínica</button></span></div>
     ${S.clinics.some((c) => c.demo) ? `<div class="notice demo-n"><span>Estas clínicas marcadas <b>DEMO</b> são só exemplo.</span><button class="btn sm danger" data-act="clearDemo">Apagar clínicas DEMO</button></div>` : ''}
     ${S.clinics.length ? `<div class="pipeline">${cols.map(([k, l]) => {
-      const list = S.clinics.filter((c) => c.stage === k);
-      return `<section class="pcol"><header><b>${l}</b><span>${list.length}</span></header>
+      let list = S.clinics.filter((c) => c.stage === k); const total = list.length;
+      if (k === 'lead' && total > 6) list = [...list].sort((a, b) => (a.nextDate || '9').localeCompare(b.nextDate || '9')).slice(0, 6);
+      if (k === 'encerrado') list = list.filter((c) => c.journey || (c.proposals || []).length);
+      return `<section class="pcol"><header><b>${l}</b><span>${k === 'lead' ? total : list.length}</span></header>${k === 'lead' && total > 6 ? `<a class="md-link" href="#/leads">Ver todos os ${total} leads →</a>` : ''}
         ${list.map((c) => {
           const st = c.journey ? overallFor(c) : null; const n = currentMonth(c);
           return `<a class="ccard" href="#/clinica/${c.id}"><b>${esc(c.name)}${demoBadge(c)}</b>
@@ -569,7 +574,7 @@ VIEWS.tarefas = () => {
     <div class="filters">
       <input type="search" placeholder="Buscar tarefa" value="${esc(ui.taskQuery)}" data-act="tq" aria-label="Buscar tarefa">
       <select data-act="towner" aria-label="Responsável"><option value="">Responsável: todos</option>${optS(OWNERS, ui.taskOwner)}</select>
-      <select data-act="tclinic" aria-label="Clínica"><option value="">Clínica: todas</option>${S.clinics.map((c) => `<option value="${c.id}"${c.id === ui.taskClinic ? ' selected' : ''}>${esc(c.name)}</option>`).join('')}</select>
+      <select data-act="tclinic" aria-label="Clínica"><option value="">Clínica: todas</option>${journeyClinics().map((c) => `<option value="${c.id}"${c.id === ui.taskClinic ? ' selected' : ''}>${esc(c.name)}</option>`).join('')}</select>
       <select data-act="tstatus" aria-label="Status"><option value="">Status: todos</option>${opt(TASK_STATUS, ui.taskStatus)}</select>
       <button class="btn sm" data-act="newTask">+ Tarefa</button>
     </div>
@@ -693,7 +698,7 @@ VIEWS.apresentar = () => {
   view().innerHTML = `
     <div class="pres-bar noprint">
       <select data-act="presClinic" aria-label="Preparar para">
-        <option value="">Apresentação geral</option>${S.clinics.map((x) => `<option value="${x.id}"${c && x.id === c.id ? ' selected' : ''}>Para: ${esc(x.name)}</option>`).join('')}
+        <option value="">Apresentação geral</option>${S.clinics.filter((x) => x.journey || ['proposta', 'negociacao'].includes(x.stage) || (x.stage === 'lead' && x.nextDate && x.nextDate <= addDays(todayStr(), 7))).map((x) => `<option value="${x.id}"${c && x.id === c.id ? ' selected' : ''}>Para: ${esc(x.name)}</option>`).join('')}
       </select>
       <span class="btns" style="margin:0">${c ? `<a class="btn sm" href="#/proposta/${c.id}">Gerar proposta</a>` : ''}<button class="theme-btn" data-act="themeToggle" aria-label="Alternar modo claro/escuro">${icon(isDark() ? 'sun' : 'moon')}</button><a class="btn sm" href="#/visao">Sair da apresentação</a></span>
     </div>
@@ -921,7 +926,7 @@ VIEWS.financeiro = () => {
     </div>
     <div class="notice">Verba de mídia é dinheiro da clínica pago à plataforma — <b>não</b> entra no faturamento da Roity.</div>
     <section class="card"><header><h3>Contratos</h3></header><div class="tscroll"><table class="tbl rtbl"><thead><tr><th>Clínica</th><th>Etapa</th><th>Honorários</th><th>Implantação</th><th>Pagamento</th><th>Mídia (clínica)</th></tr></thead><tbody>
-      ${S.clinics.map((c) => `<tr><td data-l="Clínica"><a href="#/clinica/${c.id}">${esc(c.name)}</a>${demoBadge(c)}</td><td data-l="Etapa">${stageLabel(c.stage)}</td><td data-l="Honorários">${money(c.price)}</td><td data-l="Implantação">${c.setupWaived ? 'Isenta' : money(c.setupFee)}</td>
+      ${S.clinics.filter((c) => !['lead', 'encerrado'].includes(c.stage) || c.journey).map((c) => `<tr><td data-l="Clínica"><a href="#/clinica/${c.id}">${esc(c.name)}</a>${demoBadge(c)}</td><td data-l="Etapa">${stageLabel(c.stage)}</td><td data-l="Honorários">${money(c.price)}</td><td data-l="Implantação">${c.setupWaived ? 'Isenta' : money(c.setupFee)}</td>
         <td data-l="Pagamento"><select data-act="pay" data-id="${c.id}" aria-label="Pagamento">${opt([['em_dia', 'Em dia'], ['pendente', 'Pendente'], ['atrasado', 'Atrasado'], ['na', 'Não se aplica']], c.payment)}</select></td><td data-l="Mídia (clínica)">${money(c.mediaBudget)}</td></tr>`).join('')}
     </tbody></table></div><p class="hint">Contas a receber, recebimentos e custos detalhados ficam para a Fase 2.</p></section>`;
 };
@@ -975,6 +980,9 @@ VIEWS.config = () => {
           <p class="hint">Guarde esse código (ex.: nas Notas) para colar também no celular. Use o <b>mesmo código</b> nos dois aparelhos.</p>
           <p class="hint">Conecte primeiro no aparelho que tem os dados certos (ex.: o PC) e escolha enviar os dados dele. Depois conecte o celular e escolha usar os dados da nuvem. O token fica salvo só neste aparelho e não vai no backup.</p>`}
       </section>
+      <section class="card full"><header><h3>Roteiro de ligação</h3></header>
+        <form data-form="script"><textarea name="script" rows="12">${esc(S.settings.script || SCRIPT_DEFAULT)}</textarea>
+        <div class="btns"><button class="btn primary">Salvar roteiro</button><button type="button" class="btn ghost" data-act="scriptReset">Voltar ao padrão</button></div></form></section>
       <section class="card"><header><h3>Rotinas das clínicas</h3></header>
         <p>Aplica o ciclo de campanha e conteúdo e as rotinas de segunda nas clínicas que já têm jornada, só daqui para frente.</p>
         <button class="btn" data-act="refreshAll">Atualizar rotinas de todas as clínicas</button></section>
@@ -1188,6 +1196,18 @@ document.addEventListener('click', (e) => {
       toast(willStart ? 'Cliente ativado e jornada criada' : 'Proposta marcada como aceita');
       ui.clinicTab = 'hoje'; ui.lastClinic = c.id; go('#/clinica/' + c.id);
     },
+    impOpen: () => importForm(),
+    scriptReset: () => { if (confirm('Voltar ao roteiro padrão?')) { S.settings.script = ''; save(); render(); } },
+    impPaste: () => { const t = $('#impPaste').value; if (!t.trim()) return toast('Cole as linhas primeiro'); impLoad(parseDelimited(t)); },
+    impGo: () => impGo(),
+    callStart: () => openCallMode(),
+    callClose: () => closeCallMode(),
+    callRes: () => callResult(d.r),
+    callSkip: () => { const c = leadQueue().filter((x) => !ui.callSkip.has(x.id))[0]; if (c) ui.callSkip.add(c.id); callRender(); },
+    callUnskip: () => { ui.callSkip = new Set(); callRender(); },
+    callOpen: () => { closeCallMode(); go('#/clinica/' + d.id); },
+    lf: () => { ui.lf = d.f; render(); },
+    leadsToday: () => { const t = todayStr(); let n = 0; leadClinics().forEach((c) => { if (c.nextDate && c.nextDate < t) { c.nextDate = t; n++; } }); saveNow(); render(); toast(`${n} leads trazidos para hoje`); },
     dailyChk: () => { const r = dayRec(); r[d.k][d.c] = !r[d.k][d.c]; if (r[d.k][d.c]) log(`${DAILY_CHECKS.find((x) => x.k === d.k).t}: ${clinicById(d.c).name}`, d.c); rerender(); },
     cnt: () => { const r = dayRec(); r[d.k] = Math.max(0, (r[d.k] || 0) + +d.d); rerender(); },
     prospDone: () => { const r = dayRec(); r.prospDone = !r.prospDone; if (r.prospDone) { log('Prospecção do dia concluída (2h)'); toast('Prospecção de hoje feita ✓'); } rerender(); },
@@ -1235,6 +1255,8 @@ document.addEventListener('change', (e) => {
   const H = {
     chk: () => { const t = taskById(ui.panel.id); const i = t.checklist[+d.i]; i.done = el.checked; t.history.unshift({ at: new Date().toISOString(), who: S.me, what: `checklist “${i.t}”: ${i.done ? 'feito' : 'desmarcado'}` });
       if (t.checklist.every((x) => x.done) && t.status === 'a_fazer') setTask(t, 'status', 'andamento'); if (t.checklist.some((x) => x.done) && t.status === 'a_fazer') setTask(t, 'status', 'andamento'); rerender(); },
+    impFile: () => { const fl = el.files[0]; if (!fl) return; $('#impBody').innerHTML = '<p class="hint">Lendo o arquivo…</p>'; readLeadFile(fl).then(impLoad).catch((er) => { $('#impBody').innerHTML = empty('Não consegui ler: ' + er.message, 'alert'); }); },
+    lcity: () => { ui.lcity = el.value; render(); },
     presClinic: () => { ui.presClinic = el.value || null; render(); },
     mapClinic: () => { ui.mapClinic = el.value || null; history.replaceState(null, '', '#/mapa'); closePanel(); render(); },
     kanMonth: () => { ui.kanMonth = el.value; render(); },
@@ -1263,6 +1285,13 @@ document.addEventListener('click', (e) => {
 });
 let tqTimer;
 document.addEventListener('input', (e) => {
+  const di = e.target.dataset && e.target.dataset.imp;
+  if (di && ui.imp) { const v = e.target.type === 'checkbox' ? e.target.checked : e.target.value;
+    if (['noIndiv', 'minAge', 'minCap', 'city', 'cnae'].includes(di)) ui.imp.f[di] = ['minAge', 'minCap'].includes(di) ? +v : v;
+    else if (di === 'qty') ui.imp.qty = Math.max(1, +v || 1); else if (di === 'perDay') ui.imp.perDay = Math.max(1, +v || 1); else if (di === 'start') ui.imp.start = v || todayStr();
+    if (e.target.type !== 'number' && e.target.type !== 'date') impRender(); else { clearTimeout(ui.impT); ui.impT = setTimeout(() => { const a = document.activeElement; const k = a && a.dataset.imp; impRender(); if (k) { const n = document.querySelector(`[data-imp="${k}"]`); if (n) { n.focus(); } } }, 450); }
+    return; }
+  if (e.target.dataset && e.target.dataset.act === 'lq') { clearTimeout(ui.lqT); const v = e.target.value; ui.lqT = setTimeout(() => { ui.lq = v; render(); const i = $('[data-act="lq"]'); if (i) { i.focus(); i.setSelectionRange(v.length, v.length); } }, 250); return; }
   if (e.target.dataset && e.target.dataset.pf) { propUpdate(e.target); return; }
   if (e.target.dataset.act === 'tq') { clearTimeout(tqTimer); const v = e.target.value; tqTimer = setTimeout(() => { ui.taskQuery = v; render(); const i = $('[data-act="tq"]'); i.focus(); i.setSelectionRange(v.length, v.length); }, 250); }
 });
@@ -1290,17 +1319,15 @@ document.addEventListener('submit', (e) => {
     S.tasks.push(t); log(`Criou tarefa “${t.title}”`, t.clinicId); closeModal(); rerender(); openPanel({ type: 'task', id: t.id });
   } else if (kind === 'chkAdd') {
     const t = taskById(ui.panel.id); if (!g('t')) return; t.checklist.push({ t: g('t'), done: false }); rerender(); setTimeout(() => $('#panel [name="t"]')?.focus(), 30);
+  } else if (kind === 'script') {
+    S.settings.script = g('script'); save(); toast('Roteiro salvo');
   } else if (kind === 'leadNew') {
-    const c = { id: uid(), createdAt: new Date().toISOString(), name: g('name'), phone: g('phone'), contact: g('contact'), city: g('city'), uf: '', segment: g('segment'), stage: 'lead',
+    const c = { id: uid(), createdAt: new Date().toISOString(), name: g('name'), phone: fmtPhone(normPhone('', g('phone'))) || g('phone'), contact: g('contact'), city: g('city'), uf: '', segment: g('segment'), stage: 'lead',
       price: 2500, setupFee: 1500, setupWaived: false, mediaBudget: null, startDate: todayStr(), payment: 'na', exclusivity: 'nao_solicitada', guarantee: 'em_definicao', nextAction: g('nextAction'), nextDate: g('nextDate') || todayStr(), leadLog: [] };
     S.clinics.push(c); log(`Novo lead: ${c.name}`, c.id); closeModal(); saveNow(); rerender(); toast('Lead salvo');
   } else if (kind === 'leadContact') {
-    const c = clinicById(f.dataset.id); const r = dayRec(); const res = g('result');
-    r.calls++; if (res !== 'sem_resposta') r.convos++; if (res === 'apresentacao') r.pres++;
-    c.leadLog = c.leadLog || []; c.leadLog.unshift({ at: new Date().toISOString(), who: S.me, result: res, note: g('note') });
-    if (res === 'sem_interesse') { c.stage = 'encerrado'; c.nextDate = null; c.nextAction = ''; }
-    else { c.nextDate = g('nextDate') || null; c.nextAction = g('nextAction'); if (res === 'proposta' && c.stage === 'lead') c.stage = 'proposta'; if (res === 'apresentacao' && c.stage === 'lead') c.stage = 'negociacao'; }
-    log(`Contato com ${c.name}: ${RESULTS.find((x) => x[0] === res)[1]}`, c.id); closeModal(); saveNow(); rerender(); toast('Contato registrado');
+    const c = clinicById(f.dataset.id); let d = g('nextDate'); if (d && [0, 6].includes(parseD(d).getDay())) d = nextWeekday(d);
+    applyLeadResult(c, g('result'), d, g('nextAction'), g('note')); closeModal(); saveNow(); rerender(); toast('Contato registrado');
   } else if (kind === 'syncConnect') {
     const tok = g('token'); if (!tok) return;
     f.querySelector('button').disabled = true; toast('Conectando…');
@@ -1322,7 +1349,7 @@ document.addEventListener('dragstart', (e) => { const c = e.target.closest('[dat
 document.addEventListener('dragover', (e) => { if (e.target.closest('[data-drop]')) e.preventDefault(); });
 document.addEventListener('drop', (e) => { const col = e.target.closest('[data-drop]'); if (!col) return; e.preventDefault(); const t = taskById(e.dataTransfer.getData('text/plain')); if (t) { setTask(t, 'status', col.dataset.drop); rerender(); } });
 
-document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && ui.panel && !$('#modal').open) closePanel(); });
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !$('#callMode').hidden) { closeCallMode(); return; } if (e.key === 'Escape' && ui.panel && !$('#modal').open) closePanel(); });
 
 // ================= arrastar para concluir (celular) =================
 (() => {
@@ -1374,4 +1401,4 @@ function boot() {
   renderSyncBadge(); Sync.start();
   if ('serviceWorker' in navigator && location.protocol !== 'file:') navigator.serviceWorker.register('sw.js').catch(() => {});
 }
-boot();
+window.addEventListener('DOMContentLoaded', boot);
