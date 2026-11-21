@@ -136,7 +136,7 @@ function genRoutines(clinic, n, fromDate, withMeetings = true) {
 }
 function startJourney(clinic) {
   // copia o modelo atual para a clínica (snapshot)
-  clinic.journey = { startedAt: new Date().toISOString(), routinesV: 2, template: MONTHS.map((m) => ({ n: m.n, title: m.title, short: m.short, pillars: m.pillars, desc: m.desc, outputs: m.outputs })) };
+  clinic.journey = { startedAt: new Date().toISOString(), routinesV: 3, template: MONTHS.map((m) => ({ n: m.n, title: m.title, short: m.short, pillars: m.pillars, desc: m.desc, outputs: m.outputs })) };
   for (const m of MONTHS) {
     const base = monthStart(clinic, m.n);
     m.items.forEach((it) => S.tasks.push(mkTask(clinic, m.n, it, 'novo', addDays(base, it.d - 1))));
@@ -160,7 +160,7 @@ function realignWeekends(clinic) {
 }
 // atualiza sozinho as jornadas criadas antes do ciclo de campanha (roda uma vez por clínica)
 function migrateRoutines() {
-  const old = S.clinics.filter((c) => c.journey && c.journey.routinesV !== 2);
+  const old = S.clinics.filter((c) => c.journey && c.journey.routinesV !== 3);
   if (!old.length) return 0;
   old.forEach((c) => refreshRoutines(c)); saveNow(); return old.length;
 }
@@ -180,7 +180,7 @@ function refreshRoutines(clinic) {
   let added = 0;
   for (let n = 1; n <= 12; n++) { if (monthEnd(clinic, n) < today) continue; const list = genRoutines(clinic, n, today, false); S.tasks.push(...list); added += list.length; }
   realignWeekends(clinic);
-  clinic.journey.routinesV = 2;
+  clinic.journey.routinesV = 3;
   log(`Atualizou as rotinas de ${clinic.name} (ciclo de campanha e rotinas semanais)`, clinic.id);
   return added;
 }

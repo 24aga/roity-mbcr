@@ -34,6 +34,7 @@ const ICONS = {
   mais: '<circle cx="5" cy="12" r="1.3"/><circle cx="12" cy="12" r="1.3"/><circle cx="19" cy="12" r="1.3"/>',
   leads: '<path d="M5 4h3.5l1.8 4.4-2.3 1.4a11 11 0 0 0 5.2 5.2l1.4-2.3L19 14.5V18a2 2 0 0 1-2 2A15 15 0 0 1 3 6a2 2 0 0 1 2-2z"/>',
   chev: '<path d="M9 6l6 6-6 6"/>',
+  plano: '<path d="M4 10v4a1 1 0 0 0 1 1h2l5 4V5L7 9H5a1 1 0 0 0-1 1z"/><path d="M16 9a4 4 0 0 1 0 6M18.5 6.5a8 8 0 0 1 0 11"/>',
   plus: '<path d="M12 5v14M5 12h14"/>',
   search: '<circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/>',
   sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.3 5.3l1.4 1.4M17.3 17.3l1.4 1.4M5.3 18.7l1.4-1.4M17.3 6.7l1.4-1.4"/>',
@@ -47,7 +48,7 @@ const icon = (n, cls = '') => `<svg class="ic ${cls}" viewBox="0 0 24 24" fill="
 
 // ================= roteamento =================
 const NAV = [
-  ['visao', 'Visão geral', '◧'], ['mapa', 'Mapa MBCR', '✳'], ['clinicas', 'Clínicas', '⌂'], ['leads', 'Prospecção', ''], ['tarefas', 'Tarefas', '☑'],
+  ['visao', 'Visão geral', '◧'], ['mapa', 'Mapa MBCR', '✳'], ['clinicas', 'Clínicas', '⌂'], ['leads', 'Prospecção', ''], ['plano', 'Plano de campanhas', ''], ['tarefas', 'Tarefas', '☑'],
   ['calendario', 'Calendário', ''], ['criativos', 'Criativos', ''], ['apresentar', 'Apresentar ao cliente', ''],
   ['financeiro', 'Financeiro', 'R$'], ['config', 'Configurações', '⚙'],
 ];
@@ -109,7 +110,7 @@ function monthData(clinic, n) {
     novo: tasks.filter((t) => t.kind === 'novo'), rotina: tasks.filter((t) => t.kind !== 'novo'), tasks,
     state: groupState(tasks), isCurrent: currentMonth(clinic) === n };
 }
-function dayOf(t) { const c = clinicById(t.clinicId); return c ? diffDays(monthStart(c, t.month), t.due) + 1 : t.d; }
+function dayOf(t) { const c = clinicById(t.clinicId); if (c && (!c.journey || !t.month)) return null; return c ? diffDays(monthStart(c, t.month), t.due) + 1 : t.d; }
 function overallFor(clinic) { return clinic ? groupState(S.tasks.filter((t) => t.clinicId === clinic.id)) : null; }
 
 // ================= plano do dia =================
@@ -171,7 +172,7 @@ const mine = (c) => !c.owner || c.owner === S.me;
 const isWeekday = (d) => { const w = parseD(d).getDay(); return w >= 1 && w <= 5; };
 const opClinics = () => journeyClinics().filter((c) => ['ativo', 'onboarding'].includes(c.stage));
 const leadClinics = () => S.clinics.filter((c) => ['lead', 'proposta', 'negociacao'].includes(c.stage));
-const RESULTS = [['sem_resposta', 'Não atendeu / sem resposta'], ['conversa', 'Conversei'], ['apresentacao', 'Apresentação marcada'], ['proposta', 'Pediu proposta'], ['sem_interesse', 'Sem interesse']];
+const RESULTS = [['sem_resposta', 'Não atendeu / sem resposta'], ['mensagem', 'Mensagem enviada'], ['conversa', 'Conversei'], ['apresentacao', 'Diagnóstico marcado'], ['proposta', 'Pediu proposta'], ['sem_interesse', 'Sem interesse'], ['sem_contato', 'Sem contato após 3 tentativas']];
 function dayBlocks(rec) {
   const sch = S.settings.schedule;
   let op = sch.op, pr = sch.pr;
@@ -201,20 +202,24 @@ function meuDiaHTML() {
   const open = S.tasks.filter((t) => t.status !== 'concluido' && t.due <= today && clinicById(t.clinicId)).length;
   const pr = prospRec(today); const backs = leadClinics().filter((c) => mine(c) && c.nextDate && c.nextDate <= today).sort((a, b) => a.nextDate.localeCompare(b.nextDate));
   const wk = weekTotals();
-  const counter = (k, label, goal) => `<div class="cnt ${pr[k] >= goal ? 'hit' : ''}"><span>${label}</span><b>${pr[k]}<small>/${goal}</small></b>
-    <div class="bar"><i style="width:${Math.min(100, (pr[k] / Math.max(1, goal)) * 100)}%"></i></div>
+  const counter = (k, label, goal) => `<div class="cnt ${(pr[k] || 0) >= goal ? 'hit' : ''}"><span>${label}</span><b>${pr[k] || 0}<small>/${goal}</small></b>
+    <div class="bar"><i style="width:${Math.min(100, ((pr[k] || 0) / Math.max(1, goal)) * 100)}%"></i></div>
     <div class="cnt-b"><button class="btn sm" data-act="cnt" data-k="${k}" data-d="-1" aria-label="Menos uma">−</button><button class="btn sm primary" data-act="cnt" data-k="${k}" data-d="1">+1</button></div></div>`;
   const blockHTML = (b) => {
     const live = cur && cur.k === b.k ? ' live' : '';
     if (b.k === 'op') return `<div class="md-b${live}"><header><span class="md-time">${b.range[0]}–${b.range[1]}</span><h4>Operação</h4></header>
       ${meetings.length ? `<div class="md-meet">${meetings.map((m) => `<button class="md-mt ${m.status === 'concluido' ? 'done' : ''}" data-act="task" data-id="${m.id}"><b>${m.time || '--:--'}</b><span>${esc(m.title.replace(/ \\(60 min\\)/, ''))}<small>${esc(clinicById(m.clinicId).name)}</small></span></button>`).join('')}</div>` : ''}
       ${chk}
+      ${(() => { const wt = S.tasks.filter((x) => x.planTask && x.status !== 'concluido' && x.due <= today && x.owner === S.me); return wt.length ? `<div class="md-chk"><div class="md-chk-h"><b>Plano de campanhas</b><span>${wt.length}</span></div><ul class="tlist">${wt.map((x) => taskRow(x)).join('')}</ul></div>` : ''; })()}
       <a class="md-link" href="#/tarefas" data-act="tf" data-f="hoje">${open ? `${pl(open, 'tarefa das clínicas para hoje', 'tarefas das clínicas para hoje')} →` : 'Tarefas das clínicas: tudo em dia ✓'}</a></div>`;
     return `<div class="md-b${live}"><header><span class="md-time">${b.range[0]}–${b.range[1]}</span><h4>Prospecção ativa</h4>
         <button class="md-done ${pr.prospDone ? 'on' : ''}" data-act="prospDone" aria-pressed="${pr.prospDone}">${pr.prospDone ? '✓ Feita' : 'Marcar 2h feitas'}</button></header>
-      <div class="cnts">${counter('calls', 'Ligações', g.calls)}${counter('convos', 'Conversas', g.convos)}${counter('pres', 'Apresentações', g.pres)}</div>
-      <div class="md-sub"><b>Retornos de hoje: ${backs.length}</b><span class="btns" style="margin:0"><button class="btn sm" data-act="leadNew">+ Lead</button></span></div>
-      ${backs.length ? `<button class="btn primary block-call" data-act="callStart">▶ Ligar retornos</button>
+      ${(() => { const cfg = S.plan ? S.plan.cfg : null; const w = currentWave(); const goal = cfg ? +cfg.perDay[S.me] || 0 : g.calls; const al = ((dayRec(today).alloc || {})[S.me] || []); const left = al.filter((x) => !isTouched(x[1])).length;
+        return S.plan ? `<div class="md-wave">${w ? `<small>ONDA ${w.i} · ${w.uf} · ${esc(w.cities.slice(0, 3).map((x) => x[1]).join(', '))}</small>` : ''}<b>Sua cota: ${goal} novos contatos</b><span>${cfg.callsPer} ligações + ${Math.max(0, goal - cfg.callsPer)} mensagens${al.length ? ` · faltam ${left}` : ''}</span>
+          <button class="btn primary block-call" data-act="quotaStart">▶ ${al.length ? 'Continuar' : 'Começar'} minha cota</button></div>` : `<a class="btn block-call" href="#/plano">📣 Montar o plano de campanhas</a>`; })()}
+      <div class="cnts c4">${counter('news', 'Novos', S.plan ? +S.plan.cfg.perDay[S.me] || 100 : 100)}${counter('calls', 'Ligações', S.plan ? S.plan.cfg.callsPer : g.calls)}${counter('msgs', 'Mensagens', S.plan ? Math.max(0, (+S.plan.cfg.perDay[S.me] || 100) - S.plan.cfg.callsPer) : 70)}${counter('pres', 'Diagnósticos', g.pres)}</div>
+      <div class="md-sub"><b>Retornos de hoje: ${backs.length + touchDue().length}</b><span class="btns" style="margin:0"><button class="btn sm" data-act="leadNew">+ Lead</button></span></div>
+      ${backs.length || touchDue().length ? `<button class="btn block-call" data-act="callStart">▶ Ligar retornos (${backs.length + touchDue().length})</button>
       <ul class="backs">${backs.slice(0, 4).map((c) => `<li><span><b>${esc(c.name)}</b><small>${esc([c.city, c.nextAction || 'Retornar contato'].filter(Boolean).join(' · '))}${c.nextDate < today ? ` · <em>desde ${fmtShort(c.nextDate)}</em>` : ''}</small></span>
         <span class="btns" style="margin:0"><button class="btn sm" data-act="leadContact" data-id="${c.id}">Registrar</button></span></li>`).join('')}</ul>${backs.length > 4 ? `<a class="md-link" href="#/leads">Ver a fila inteira (${backs.length}) →</a>` : ''}`
       : `<p class="muted md-empty">Nenhum retorno para hoje.</p>`}
@@ -341,7 +346,7 @@ function capacity() {
   for (const c of list) {
     const n = Math.min(12, Math.max(1, currentMonth(c)));
     S.tasks.filter((t) => t.clinicId === c.id && t.month === n).forEach((t) => { if (people[t.owner]) people[t.owner].need += t.hours || 1; });
-    DAILY_CHECKS.forEach((dc) => { if (people[dc.o]) people[dc.o].need += (dc.min * wd) / 60; });
+    DAILY_CHECKS.forEach((dc) => { const h = (dc.min * wd) / 60; if (dc.o === 'Ambos') { people.Tiago.need += h / 2; people.Micaela.need += h / 2; } else if (people[dc.o]) people[dc.o].need += h; });
   }
   const totalNeed = people.Tiago.need + people.Micaela.need, totalCap = people.Tiago.cap + people.Micaela.cap;
   const perClinic = list.length ? totalNeed / list.length : 16;
@@ -371,9 +376,9 @@ function taskRow(t, o = {}) {
   return `<li class="trow ${t.status === 'concluido' ? 'done' : ''} ${ui.justDone === t.id ? 'just-done' : ''}">
     <button class="chk ${t.status === 'concluido' ? 'on' : ''}" data-act="done" data-id="${t.id}" aria-label="${t.status === 'concluido' ? 'Reabrir' : 'Concluir'}: ${esc(t.title)}">${t.status === 'concluido' ? '✓' : ''}</button>
     <button class="trow-b" data-act="task" data-id="${t.id}">
-      <span class="trow-t">${o.day ? `<span class="dayb">Dia ${dayOf(t)}</span>` : ''}${esc(t.title)}</span>
+      <span class="trow-t">${o.day && dayOf(t) != null ? `<span class="dayb">Dia ${dayOf(t)}</span>` : ''}${t.time ? `<span class="dayb tm">${esc(t.time)}</span>` : ''}${esc(t.title)}</span>
       ${how ? `<span class="trow-h">${esc(how)}</span>` : ''}
-      <span class="trow-s">${pillarTag(t.pillar)} ${o.day ? (t.kind === 'novo' ? 'Novo · ' : 'Rotina · ') : c ? esc(c.name) + ' · Mês ' + t.month + ' · ' : ''}${esc(t.owner)} · ${fmtShort(t.due)}</span>
+      <span class="trow-s">${pillarTag(t.pillar)} ${o.day ? (t.kind === 'novo' ? 'Novo · ' : 'Rotina · ') : c ? esc(c.name) + (t.month ? ' · Mês ' + t.month : '') + ' · ' : ''}${esc(t.owner)} · ${fmtShort(t.due)}</span>
     </button>${pill(s.k, s.l)}</li>`;
 }
 
@@ -494,7 +499,7 @@ VIEWS.clinica = () => {
   const tabs = [['hoje', 'Hoje'], ['resultados', 'Resultados'], ['resumo', 'Resumo'], ['jornada', 'Jornada'], ['tarefas', 'Tarefas'], ['contrato', 'Contrato e garantia'], ['historico', 'Histórico']];
   const st = c.journey ? overallFor(c) : null; const n = currentMonth(c);
   let body = '';
-  const oldR = c.journey && c.journey.routinesV !== 2 ? `<div class="notice demo-n"><span>Esta clínica ainda está com as rotinas antigas. Atualize para receber o ciclo de campanha e conteúdo e as rotinas de segunda.</span><button class="btn sm primary" data-act="refreshOne" data-id="${c.id}">Atualizar rotinas</button></div>` : '';
+  const oldR = c.journey && c.journey.routinesV !== 3 ? `<div class="notice demo-n"><span>Esta clínica ainda está com as rotinas antigas. Atualize para receber o ciclo de campanha e conteúdo e as rotinas de segunda.</span><button class="btn sm primary" data-act="refreshOne" data-id="${c.id}">Atualizar rotinas</button></div>` : '';
   if (ui.clinicTab === 'hoje') {
     body = oldR + (['lead', 'proposta', 'negociacao'].includes(c.stage) ? leadCard(c) : '') + (c.journey ? todayHTML(c, false) : empty('Jornada ainda não iniciada. Quando a proposta for aceita, as tarefas aparecem aqui.', 'calendario'));
   } else if (ui.clinicTab === 'resumo') {
@@ -1166,7 +1171,7 @@ function renderSearch(q) {
   const pr = []; S.clinics.forEach((c) => (c.proposals || []).forEach((p) => { if (has(p.title) || has(c.name) && q.length > 2 || has(p.procedure) || has(p.objective)) pr.push([c, p]); }));
   const sec = (t, items) => items.length ? `<h5>${t}</h5>${items.join('')}` : '';
   const html = sec('Clínicas', cl.map((c) => `<a class="s-item" href="#/clinica/${c.id}" data-s="1">${icon('clinicas')}<span><b>${esc(c.name)}</b><small>${esc([segLabel(c.segment), c.city, stageLabel(c.stage)].filter(Boolean).join(' · '))}</small></span></a>`))
-    + sec('Tarefas', tk.map((t) => { const s2 = taskStatusLabel(t); return `<button class="s-item" data-act="task" data-id="${t.id}" data-s="1">${icon('tarefas')}<span><b>${esc(t.title)}</b><small>${esc(clinicById(t.clinicId).name)} · Mês ${t.month} · Dia ${dayOf(t)} · ${s2.l}</small></span></button>`; }))
+    + sec('Tarefas', tk.map((t) => { const s2 = taskStatusLabel(t); return `<button class="s-item" data-act="task" data-id="${t.id}" data-s="1">${icon('tarefas')}<span><b>${esc(t.title)}</b><small>${esc(clinicById(t.clinicId).name)}${dayOf(t) != null ? ` · Mês ${t.month} · Dia ${dayOf(t)}` : ' · ' + fmtShort(t.due)} · ${s2.l}</small></span></button>`; }))
     + sec('Propostas', pr.slice(0, 5).map(([c, p]) => `<a class="s-item" href="#/proposta/${c.id}/${p.id}" data-s="1">${icon('financeiro')}<span><b>${esc(p.title || 'Proposta')} — ${esc(c.name)}</b><small>${fmtDate(p.date)} · ${{ enviada: 'Enviada', aceita: 'Aceita' }[p.status] || 'Rascunho'}</small></span></a>`));
   box.innerHTML = html || `<p class="hint s-hint">Nada encontrado para “${esc(q)}”.</p>`;
 }
@@ -1220,6 +1225,9 @@ document.addEventListener('click', (e) => {
       ui.clinicTab = 'hoje'; ui.lastClinic = c.id; go('#/clinica/' + c.id);
     },
     impOpen: () => importForm(),
+    quotaStart: () => startQuota(),
+    planRe: async () => { toast('Replanejando…'); await genPlan('Replanejado manualmente'); render(); toast('Plano replanejado'); },
+    waveMore: () => { ui.waveShow = (ui.waveShow || 8) + 10; render(); },
     resN2: () => { ui.resN = +d.n; render(); },
     finNav: () => { ui.finYm = +d.d === 0 ? todayStr().slice(0, 7) : ymAdd(ui.finYm || todayStr().slice(0, 7), +d.d); render(); },
     payToggle: () => { const p = S.payments.find((x) => x.id === d.id); if (!p) return; p.paidAt = p.paidAt ? null : todayStr(); const c = clinicById(p.clinicId); log(`${p.paidAt ? 'Recebido' : 'Desfeito recebimento'}: ${c ? c.name : ''} ${p.kind} ${p.ym} (${money(p.amount)})`, p.clinicId);
@@ -1288,6 +1296,7 @@ document.addEventListener('click', (e) => {
 });
 
 document.addEventListener('change', (e) => {
+  if (e.target.name === 'tier' && e.target.closest('.chip')) e.target.closest('.chip').classList.toggle('on', e.target.checked);
   const el = e.target; const d = el.dataset;
   if (d.tf && ui.panel && ui.panel.type === 'task') {
     const t = taskById(ui.panel.id); let v = el.value;
@@ -1329,6 +1338,7 @@ document.addEventListener('click', (e) => {
 });
 let tqTimer;
 document.addEventListener('input', (e) => {
+  if (e.target.dataset && e.target.dataset.spent && S.plan) { const w = S.plan.waves.find((x) => x.i === +e.target.dataset.spent); if (w) { w.spent = e.target.value === '' ? 0 : Number(e.target.value); save(); } return; }
   const dsx = e.target.dataset || {};
   if (dsx.mf) { const m = metricEnsure(dsx.c, +dsx.n); m[dsx.mf] = e.target.value === '' ? null : Number(e.target.value); m.updatedAt = new Date().toISOString(); save();
     const sv = $('#mSaved'); if (sv) sv.textContent = 'salvo ✓'; clearTimeout(ui.mfT); ui.mfT = setTimeout(() => { const y = $('.main').scrollTop; const k = dsx.mf; render(); $('.main').scrollTop = y; const i = document.querySelector(`[data-mf="${k}"]`); if (i) { i.focus(); const L = i.value.length; try { i.setSelectionRange(L, L); } catch (er) {} } }, 900); return; }
@@ -1378,6 +1388,12 @@ document.addEventListener('submit', (e) => {
     S.tasks.push(t); log(`Criou tarefa “${t.title}”`, t.clinicId); closeModal(); rerender(); openPanel({ type: 'task', id: t.id });
   } else if (kind === 'chkAdd') {
     const t = taskById(ui.panel.id); if (!g('t')) return; t.checklist.push({ t: g('t'), done: false }); rerender(); setTimeout(() => $('#panel [name="t"]')?.focus(), 30);
+  } else if (kind === 'planCfg') {
+    const tiers = fd.getAll('tier'); if (!tiers.length) { alert('Escolha pelo menos uma classe.'); return; }
+    S.settings.plan = { ...(S.settings.plan || {}), start: g('start') || '2026-11-27', budgetDay: n('budgetDay') ?? 40, perDay: { Tiago: n('pT') ?? 100, Micaela: n('pM') ?? 100 }, callsPer: n('callsPer') ?? 30,
+      adsLead: n('adsLead') ?? 4, waveDays: n('waveDays') || 5, diagSlots: n('diagSlots') || 3, tiers, blocked: g('blocked').split(/\s+/).filter((x) => /^\d{4}-\d{2}-\d{2}$/.test(x)) };
+    const btn = f.querySelector('.btn.primary'); btn.disabled = true; btn.textContent = 'Calculando… (carrega os 6 estados)';
+    genPlan(S.plan ? 'Configuração alterada' : 'Plano inicial').then(() => { render(); toast('Plano pronto'); }).catch((er) => { alert('Não consegui gerar: ' + er.message); render(); });
   } else if (kind === 'pin') {
     const v = g('pin'); if (!/^\d{4,8}$/.test(v)) { alert('Use de 4 a 8 números.'); return; }
     pinHash(v).then((h) => { try { localStorage.setItem(PIN_KEY, h); sessionStorage.setItem('roity-unlocked', '1'); } catch (er) {} render(); toast('Código ativado neste aparelho'); });

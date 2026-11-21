@@ -185,11 +185,12 @@ async function impBase() {
 
 // ---------- registrar resultado ----------
 function applyLeadResult(c, res, nextDate, nextAction, note) {
-  const r = prospRec(); r.calls++; if (res !== 'sem_resposta') r.convos++; if (res === 'apresentacao') r.pres++;
+  const r = prospRec(); if (res === 'mensagem') r.msgs = (r.msgs || 0) + 1; else r.calls++; if (!(c.leadLog || []).length) r.news = (r.news || 0) + 1;
+  if (!['sem_resposta', 'mensagem'].includes(res)) r.convos++; if (res === 'apresentacao') r.pres++;
   c.leadLog = c.leadLog || []; c.leadLog.unshift({ at: new Date().toISOString(), who: S.me, result: res, note: note || '' });
   if (res === 'sem_interesse') { c.stage = 'encerrado'; c.nextDate = null; c.nextAction = ''; }
   else {
-    c.nextDate = nextDate || addWeekdays(todayStr(), 2); c.nextAction = nextAction || ({ sem_resposta: 'Tentar de novo', conversa: 'Retomar conversa', apresentacao: 'Apresentação', proposta: 'Enviar proposta' }[res] || '');
+    c.nextDate = nextDate || addWeekdays(todayStr(), 2); c.nextAction = nextAction || ({ sem_resposta: 'Tentar de novo', mensagem: 'Ver resposta da mensagem', conversa: 'Retomar conversa', apresentacao: 'Diagnóstico', proposta: 'Enviar proposta' }[res] || '');
     if (res === 'proposta' && ['lead', 'negociacao'].includes(c.stage)) c.stage = 'proposta';
     if (res === 'apresentacao' && c.stage === 'lead') c.stage = 'negociacao';
   }

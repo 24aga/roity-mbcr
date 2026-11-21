@@ -97,7 +97,7 @@ Object.assign(HOWTO, {
   'Otimização semanal das campanhas de base': 'Ver respostas e agendamentos das campanhas de base e ajustar mensagens e cadência.',
   'Agendar e conferir os posts da semana': 'Agendar os posts da semana conforme o calendário editorial e conferir se a clínica publicou o combinado.',
 });
-const howTo = (title) => HOWTO[title] || '';
+const howTo = (title) => { const m = String(title).match(/^Onda \d+ · \w{2}: (.+?)( — .*)?$/); return (m ? HOWTO[m[1]] : HOWTO[title]) || ''; };
 
 // Versão para o cliente (modo Apresentar): linguagem do que a clínica ganha.
 const HOWTO_CLIENT = {

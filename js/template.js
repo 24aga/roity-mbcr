@@ -142,10 +142,10 @@ const ROUTINES = [
   { t: 'Editar vídeos e artes do mês', p: 'B', o: 'Micaela', d: 8, h: 1.5 },
   { t: 'Aprovar os criativos com a clínica', p: 'B', o: 'Micaela', d: 9, h: 0.5 },
   { t: 'Subir a campanha e os anúncios novos', p: 'M', o: 'Tiago', d: 10, h: 1, skip: [1], alt: 'Campanha de base: follow-up e reativação no ar' },
-  { t: 'Manutenção dos fluxos 24AGÁ', p: 'C', o: 'Tiago', d: 10, h: 1, skip: [1] }, // mês 1 tem a implantação
+  { t: 'Manutenção dos fluxos 24AGÁ', p: 'C', o: 'Micaela', d: 10, h: 1, skip: [1] }, // mês 1 tem a implantação
   { t: 'Trocar os criativos que cansaram', p: 'M', o: 'Tiago', d: 20, h: 0.5 },
   { t: 'Reunião 2 — Treinamento comercial e conversão (60 min)', p: 'C', o: 'Tiago', d: 21, meeting: true, h: 1 },
-  { t: 'Analisar o mês e separar os números', p: 'M', o: 'Micaela', d: 25, h: 1 },
+  { t: 'Analisar o mês e separar os números', p: 'M', o: 'Tiago', d: 25, h: 1 },
   { t: 'Relatório mensal (revisado por Tiago)', p: 'M', o: 'Tiago', d: 28, h: 1.5, skip: [1] }, // mês 1 tem o primeiro relatório
 ];
 // Rotinas semanais (toda segunda-feira do mês)
@@ -155,8 +155,8 @@ const WEEKLY = [
 ];
 // Rotina diária (seg–sex), em checklist único para todas as clínicas — minutos por clínica
 const DAILY_CHECKS = [
-  { k: 'mon', t: 'Monitorar anúncios', d: 'Gasto, custo por contato e anúncios reprovados', o: 'Micaela', min: 5 },
-  { k: 'msg', t: 'Mensagens e pedidos da clínica', d: 'Responder dúvidas e pedidos do dia', o: 'Tiago', min: 5 },
+  { k: 'mon', t: 'Monitorar anúncios', d: 'Gasto, custo por contato e anúncios reprovados', o: 'Tiago', min: 5 },
+  { k: 'msg', t: 'Suporte nos grupos das clínicas', d: 'Responder dúvidas, pedidos e mensagens do dia', o: 'Ambos', min: 5 },
 ];
 const PROSPECT_MIN = 120;
 
