@@ -82,6 +82,21 @@ const HOWTO = {
   'Revisão de métricas e alimentar resultados': 'Coletar números de Ads, 24AGÁ e clínica e lançar em Resultados.',
   'Relatório mensal (revisado por Tiago)': 'Montar o relatório do mês (ações, indicadores, pendências e próximos passos), Tiago revisa antes de enviar.',
 };
+Object.assign(HOWTO, {
+  'Planejar a campanha do mês (oferta, público e orçamento)': 'Definir a oferta do mês, o público, o orçamento diário e o objetivo da campanha, alinhado à novidade do método e ao procedimento prioritário.',
+  'Planejar a campanha de base (ou mídia, se mantida)': 'Se a mídia estiver pausada: planejar follow-up e reativação da base. Se a clínica manteve a mídia: planejar a campanha normalmente.',
+  'Roteiros dos criativos e envio à clínica': 'Escrever os roteiros dos vídeos do mês (até 6 criativos, somando imagens) e enviar à clínica com prazo de gravação até o dia 5.',
+  'Cobrar e receber as gravações da clínica': 'Conferir se os vídeos chegaram; se não, cobrar a clínica com gentileza e combinar nova data no mesmo dia.',
+  'Editar vídeos e artes do mês': 'Editar os vídeos e montar as artes com a identidade da clínica. Atualizar o status em Criativos.',
+  'Aprovar os criativos com a clínica': 'Enviar as peças para aprovação. Respeitar o limite de revisões combinado.',
+  'Subir a campanha e os anúncios novos': 'Publicar a campanha do mês no Meta Ads com os criativos aprovados, conferir pixel/mensuração e orçamento.',
+  'Campanha de base: follow-up e reativação no ar': 'Ativar na 24AGÁ as mensagens do mês para a base (follow-up, reativação e retorno), com consentimento e opção de sair.',
+  'Trocar os criativos que cansaram': 'Ver quais anúncios perderam desempenho (custo subindo, frequência alta) e substituir por peças novas ou variações.',
+  'Analisar o mês e separar os números': 'Reunir investimento, contatos, agendamentos, comparecimentos e pacientes do mês para o relatório.',
+  'Otimização semanal dos anúncios': 'Pausar anúncios ruins, reforçar os bons, ajustar orçamento e público. Anotar a decisão.',
+  'Otimização semanal das campanhas de base': 'Ver respostas e agendamentos das campanhas de base e ajustar mensagens e cadência.',
+  'Agendar e conferir os posts da semana': 'Agendar os posts da semana conforme o calendário editorial e conferir se a clínica publicou o combinado.',
+});
 const howTo = (title) => HOWTO[title] || '';
 
 // Versão para o cliente (modo Apresentar): linguagem do que a clínica ganha.

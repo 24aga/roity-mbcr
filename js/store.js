@@ -42,11 +42,14 @@ function defaultState() {
     settings: {
       theme: 'auto',
       goalClinics: 20,
-      capacity: { Tiago: 4, Micaela: 4 }, // horas por dia útil
+      capacity: { Tiago: 2, Micaela: 4 }, // horas de operação por dia útil (Tiago: + 2h de prospecção)
       workDays: 21,
       hoursPerCreative: 0.25,
       reviewLimit: 2,
+      schedule: { op: ['13:00', '15:00'], pr: ['15:00', '17:00'] },
+      goals: { calls: 30, convos: 5, pres: 1 },
     },
+    daily: {},
     clinics: [], tasks: [], creatives: [], metrics: [], log: [],
   };
 }
@@ -100,28 +103,65 @@ const AGENDAS = {
 function agendaFor(title) { return /^Reunião 2/.test(title) ? AGENDAS[2] : AGENDAS[1]; }
 function fillAgendas() { let n = 0; S.tasks.forEach((t) => { if (t.meeting && !(t.notes || '').trim()) { t.notes = agendaFor(t.title); n++; } }); return n; }
 
+// fins de semana: se a clínica não trabalha (padrão), a data vai para sexta antes ou segunda depois, sem sair do mês
+function workday(clinic, n, due) {
+  if (clinic.weekends) return due;
+  const w = parseD(due).getDay(); if (w !== 0 && w !== 6) return due;
+  const s0 = monthStart(clinic, n), e0 = monthEnd(clinic, n);
+  const prevFri = addDays(due, w === 6 ? -1 : -2), nextMon = addDays(due, w === 6 ? 2 : 1);
+  if (w === 6) return prevFri >= s0 ? prevFri : nextMon <= e0 ? nextMon : due;
+  return nextMon <= e0 ? nextMon : prevFri >= s0 ? prevFri : due;
+}
+function mkTask(clinic, n, it, kind, due) {
+  due = workday(clinic, n, due);
+  return { id: uid(), clinicId: clinic.id, month: n, kind, pillar: it.p, title: it.t, owner: it.o, due, priority: kind === 'novo' ? 'alta' : 'media',
+    status: 'a_fazer', checklist: (it.c || []).map((t) => ({ t, done: false })), meeting: !!it.meeting, weekly: !!it.weekly,
+    hours: it.h || 1, evidence: '', notes: it.meeting ? agendaFor(it.t) : '', doneAt: null, history: [{ at: new Date().toISOString(), who: S.me, what: 'Criada pela jornada MBCR' }] };
+}
+// rotinas do mês n (mensais + segundas-feiras). fromDate: só gera a partir dessa data; withMeetings: inclui reuniões
+function genRoutines(clinic, n, fromDate, withMeetings = true) {
+  const base = monthStart(clinic, n), end = monthEnd(clinic, n); const out = [];
+  ROUTINES.forEach((it) => {
+    if (it.skip && it.skip.includes(n)) return;
+    if (it.meeting && !withMeetings) return;
+    const due = addDays(base, it.d - 1); if (fromDate && due < fromDate) return;
+    out.push(mkTask(clinic, n, { ...it, t: n >= 11 && it.alt ? it.alt : it.t }, 'rotina', due));
+  });
+  for (let d = base; d <= end; d = addDays(d, 1)) {
+    if (parseD(d).getDay() !== 1 || (fromDate && d < fromDate)) continue;
+    WEEKLY.forEach((it) => out.push(mkTask(clinic, n, { ...it, t: n >= 11 && it.alt ? it.alt : it.t, weekly: true }, 'rotina', d)));
+  }
+  return out;
+}
 function startJourney(clinic) {
   // copia o modelo atual para a clínica (snapshot)
-  clinic.journey = { startedAt: new Date().toISOString(), template: MONTHS.map((m) => ({ n: m.n, title: m.title, short: m.short, pillars: m.pillars, desc: m.desc, outputs: m.outputs })) };
+  clinic.journey = { startedAt: new Date().toISOString(), routinesV: 2, template: MONTHS.map((m) => ({ n: m.n, title: m.title, short: m.short, pillars: m.pillars, desc: m.desc, outputs: m.outputs })) };
   for (const m of MONTHS) {
     const base = monthStart(clinic, m.n);
-    const mk = (it, kind) => ({
-      id: uid(), clinicId: clinic.id, month: m.n, kind, pillar: it.p, title: it.t,
-      owner: it.o, due: addDays(base, it.d - 1), priority: kind === 'novo' ? 'alta' : 'media',
-      status: 'a_fazer', checklist: (it.c || []).map((t) => ({ t, done: false })), meeting: !!it.meeting,
-      hours: it.h || 1, evidence: '', notes: it.meeting ? agendaFor(it.t) : '', doneAt: null, history: [{ at: new Date().toISOString(), who: S.me, what: 'Criada pela jornada MBCR' }],
-    });
-    m.items.forEach((it) => S.tasks.push(mk(it, 'novo')));
-    ROUTINES.forEach((it) => {
-      const t = mk(it, 'rotina');
-      if (m.n >= 11 && it.t.startsWith('Gestão e otimização Meta Ads')) t.title = 'Meta Ads — conforme decisão de mídia (pausar/manter)';
-      S.tasks.push(t);
-    });
+    m.items.forEach((it) => S.tasks.push(mkTask(clinic, m.n, it, 'novo', addDays(base, it.d - 1))));
+    S.tasks.push(...genRoutines(clinic, m.n));
     for (let i = 1; i <= CREATIVES_PER_MONTH; i++) {
-      S.creatives.push({ id: uid(), clinicId: clinic.id, month: m.n, slot: i, type: i <= 3 ? 'video' : 'imagem', title: '', procedure: '', status: 'roteiro', reviews: 0, due: addDays(base, 13), notes: '' });
+      S.creatives.push({ id: uid(), clinicId: clinic.id, month: m.n, slot: i, type: i <= 3 ? 'video' : 'imagem', title: '', procedure: '', status: 'roteiro', reviews: 0, due: addDays(base, 8), notes: '' });
     }
   }
   log(`Iniciou jornada MBCR a partir de ${fmtDate(clinic.startDate)}`, clinic.id);
+}
+// atualiza as rotinas de uma jornada já iniciada: só daqui para frente, sem mexer no que foi feito nem nas reuniões
+function realignWeekends(clinic) {
+  const today = todayStr(); let n = 0;
+  S.tasks.forEach((t) => { if (t.clinicId === clinic.id && t.status !== 'concluido' && t.due >= today) { const d = workday(clinic, t.month, t.due); if (d !== t.due) { t.due = d; n++; } } });
+  return n;
+}
+function refreshRoutines(clinic) {
+  if (!clinic.journey) return 0;
+  const today = todayStr();
+  S.tasks = S.tasks.filter((t) => !(t.clinicId === clinic.id && t.kind === 'rotina' && !t.meeting && !t.custom && t.status === 'a_fazer' && t.due >= today));
+  let added = 0;
+  for (let n = 1; n <= 12; n++) { if (monthEnd(clinic, n) < today) continue; const list = genRoutines(clinic, n, today, false); S.tasks.push(...list); added += list.length; }
+  realignWeekends(clinic);
+  clinic.journey.routinesV = 2;
+  log(`Atualizou as rotinas de ${clinic.name} (ciclo de campanha e rotinas semanais)`, clinic.id);
+  return added;
 }
 
 function deleteClinic(id) {
@@ -196,5 +236,6 @@ function seedDemo() {
 function initStore() {
   S = load();
   if (!S) { S = defaultState(); seedDemo(); saveNow(); }
+  if (!S.settings.v2) { S.settings.v2 = true; if (S.settings.capacity.Tiago === 4) S.settings.capacity.Tiago = 2; }
   if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
 }

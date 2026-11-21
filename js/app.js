@@ -157,6 +157,96 @@ function todayHTML(c, compact) {
     ${p.feitoHoje.length ? `<h4 class="dg done">Feito hoje <small>${p.feitoHoje.length}</small></h4><ul class="tlist">${p.feitoHoje.map((t) => taskRow(t, { day: true })).join('')}</ul>` : ''}`;
 }
 
+// ================= Meu dia (tarde: Operação + Prospecção) =================
+const nowHM = () => new Intl.DateTimeFormat('pt-BR', { timeZone: TZ, hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date());
+function dayRec(d = todayStr()) {
+  S.daily = S.daily || {};
+  return (S.daily[d] = S.daily[d] || { mon: {}, msg: {}, calls: 0, convos: 0, pres: 0, prospDone: false, swap: false });
+}
+const isWeekday = (d) => { const w = parseD(d).getDay(); return w >= 1 && w <= 5; };
+const opClinics = () => journeyClinics().filter((c) => ['ativo', 'onboarding'].includes(c.stage));
+const leadClinics = () => S.clinics.filter((c) => ['lead', 'proposta', 'negociacao'].includes(c.stage));
+const RESULTS = [['sem_resposta', 'Não atendeu / sem resposta'], ['conversa', 'Conversei'], ['apresentacao', 'Apresentação marcada'], ['proposta', 'Pediu proposta'], ['sem_interesse', 'Sem interesse']];
+function dayBlocks(rec) {
+  const sch = S.settings.schedule;
+  let op = sch.op, pr = sch.pr;
+  if (rec.swap) [op, pr] = [pr, op];
+  return [{ k: 'op', title: 'Operação', range: op }, { k: 'pr', title: 'Prospecção ativa', range: pr }].sort((a, b) => a.range[0].localeCompare(b.range[0]));
+}
+function weekTotals() {
+  const t = todayStr(); const d0 = addDays(t, -((parseD(t).getDay() + 6) % 7)); const sum = { calls: 0, convos: 0, pres: 0 };
+  for (let d = d0; d <= t; d = addDays(d, 1)) { const r = (S.daily || {})[d]; if (r) { sum.calls += r.calls; sum.convos += r.convos; sum.pres += r.pres; } }
+  return sum;
+}
+function meuDiaHTML() {
+  const today = todayStr(); const rec = dayRec(today); const now = nowHM();
+  if (!isWeekday(today)) return `<section class="md weekend"><div class="md-h"><div><small>MEU DIA</small><h3>Fim de semana</h3></div></div><p class="muted">Aproveite. Nada de rotina hoje 🙂</p></section>`;
+  const blocks = dayBlocks(rec); const start = blocks[0].range[0], end = blocks[1].range[1];
+  const cur = blocks.find((b) => now >= b.range[0] && now < b.range[1]);
+  const status = now < start ? `☀ Manhã livre — o trabalho começa às ${start}` : now >= end ? '✓ Expediente encerrado' : `Agora: <b>${cur ? cur.title : ''}</b>`;
+  const meetings = S.tasks.filter((t) => t.meeting && t.due === today && clinicById(t.clinicId)).sort((a, b) => (a.time || '99').localeCompare(b.time || '99'));
+  const prB = blocks.find((b) => b.k === 'pr');
+  const clash = meetings.find((m) => m.time && m.time >= prB.range[0] && m.time < prB.range[1] && m.status !== 'concluido');
+  const ops = opClinics(); const g = S.settings.goals;
+  const chk = DAILY_CHECKS.map((dc) => {
+    const done = ops.filter((c) => rec[dc.k][c.id]).length;
+    return `<div class="md-chk"><div class="md-chk-h"><b>${dc.t}</b><span>${done}/${ops.length}</span></div><small>${dc.d} · ${dc.o}</small>
+      <div class="chips">${ops.map((c) => `<button class="chip ${rec[dc.k][c.id] ? 'on' : ''}" data-act="dailyChk" data-k="${dc.k}" data-c="${c.id}" aria-pressed="${!!rec[dc.k][c.id]}">${rec[dc.k][c.id] ? '✓ ' : ''}${esc(c.name)}</button>`).join('') || '<small class="muted">Nenhuma clínica ativa.</small>'}</div></div>`;
+  }).join('');
+  const open = S.tasks.filter((t) => t.status !== 'concluido' && t.due <= today && clinicById(t.clinicId)).length;
+  const backs = leadClinics().filter((c) => c.nextDate && c.nextDate <= today).sort((a, b) => a.nextDate.localeCompare(b.nextDate));
+  const wk = weekTotals();
+  const counter = (k, label, goal) => `<div class="cnt ${rec[k] >= goal ? 'hit' : ''}"><span>${label}</span><b>${rec[k]}<small>/${goal}</small></b>
+    <div class="bar"><i style="width:${Math.min(100, (rec[k] / Math.max(1, goal)) * 100)}%"></i></div>
+    <div class="cnt-b"><button class="btn sm" data-act="cnt" data-k="${k}" data-d="-1" aria-label="Menos uma">−</button><button class="btn sm primary" data-act="cnt" data-k="${k}" data-d="1">+1</button></div></div>`;
+  const blockHTML = (b) => {
+    const live = cur && cur.k === b.k ? ' live' : '';
+    if (b.k === 'op') return `<div class="md-b${live}"><header><span class="md-time">${b.range[0]}–${b.range[1]}</span><h4>Operação</h4></header>
+      ${meetings.length ? `<div class="md-meet">${meetings.map((m) => `<button class="md-mt ${m.status === 'concluido' ? 'done' : ''}" data-act="task" data-id="${m.id}"><b>${m.time || '--:--'}</b><span>${esc(m.title.replace(/ \\(60 min\\)/, ''))}<small>${esc(clinicById(m.clinicId).name)}</small></span></button>`).join('')}</div>` : ''}
+      ${chk}
+      <a class="md-link" href="#/tarefas" data-act="tf" data-f="hoje">${open ? `${pl(open, 'tarefa das clínicas para hoje', 'tarefas das clínicas para hoje')} →` : 'Tarefas das clínicas: tudo em dia ✓'}</a></div>`;
+    return `<div class="md-b${live}"><header><span class="md-time">${b.range[0]}–${b.range[1]}</span><h4>Prospecção ativa</h4>
+        <button class="md-done ${rec.prospDone ? 'on' : ''}" data-act="prospDone" aria-pressed="${rec.prospDone}">${rec.prospDone ? '✓ Feita' : 'Marcar 2h feitas'}</button></header>
+      <div class="cnts">${counter('calls', 'Ligações', g.calls)}${counter('convos', 'Conversas', g.convos)}${counter('pres', 'Apresentações', g.pres)}</div>
+      <div class="md-sub"><b>Retornos de hoje</b><button class="btn sm" data-act="leadNew">+ Lead</button></div>
+      ${backs.length ? `<ul class="backs">${backs.map((c) => `<li><span><b>${esc(c.name)}</b><small>${esc(c.nextAction || 'Retornar contato')}${c.nextDate < today ? ` · <em>desde ${fmtShort(c.nextDate)}</em>` : ''}</small></span>
+        <span class="btns" style="margin:0">${c.phone ? `<a class="btn sm" href="tel:${esc(c.phone.replace(/[^\\d+]/g, ''))}">Ligar</a>` : ''}<button class="btn sm primary" data-act="leadContact" data-id="${c.id}">Registrar</button></span></li>`).join('')}</ul>` : `<p class="muted md-empty">Nenhum retorno marcado para hoje. Use “+ Lead” para cadastrar quem você ligar.</p>`}
+      <small class="muted">Semana: ${pl(wk.calls, 'ligação', 'ligações')} · ${pl(wk.convos, 'conversa', 'conversas')} · ${pl(wk.pres, 'apresentação', 'apresentações')}</small></div>`;
+  };
+  return `<section class="md">
+    <div class="md-h"><div><small>MEU DIA</small><h3>${status}</h3></div>
+      ${clash && !rec.swap ? '' : `<button class="btn sm" data-act="swapBlocks">${rec.swap ? '↺ Ordem normal' : '⇅ Trocar blocos hoje'}</button>`}</div>
+    ${clash && !rec.swap ? `<div class="notice warn demo-n"><span>Reunião às <b>${clash.time}</b> cai no horário da prospecção. Que tal prospectar antes?</span><button class="btn sm primary" data-act="swapBlocks">Trocar blocos hoje</button></div>` : ''}
+    <div class="md-grid">${blocks.map(blockHTML).join('')}</div>
+  </section>`;
+}
+function leadForm() {
+  modal(`<form data-form="leadNew" class="mform"><h2>Novo lead</h2>
+    <label class="full"><span>Nome da clínica *</span><input name="name" required></label>
+    <label><span>Telefone</span><input name="phone" inputmode="tel"></label>
+    <label><span>Contato (nome)</span><input name="contact"></label>
+    <label><span>Cidade</span><input name="city"></label>
+    <label><span>Segmento</span><select name="segment">${opt([['estetica', 'Estética'], ['odontologia', 'Odontologia']], 'estetica')}</select></label>
+    <label class="full"><span>Próxima ação</span><input name="nextAction" value="Primeira ligação"></label>
+    <label><span>Data do contato</span><input type="date" name="nextDate" value="${todayStr()}"></label>
+    <div class="btns end"><button type="button" class="btn" data-act="closeModal">Cancelar</button><button class="btn primary">Salvar lead</button></div></form>`);
+}
+function leadContactForm(c) {
+  modal(`<form data-form="leadContact" data-id="${c.id}" class="mform"><h2>Contato com ${esc(c.name)}</h2>
+    ${c.phone ? `<p class="full"><a class="btn" href="tel:${esc(c.phone.replace(/[^\d+]/g, ''))}">Ligar ${esc(c.phone)}</a></p>` : ''}
+    <label class="full"><span>Como foi?</span><select name="result">${opt(RESULTS, 'conversa')}</select></label>
+    <label class="full"><span>Próxima ação</span><input name="nextAction" value="${esc(c.nextAction || '')}" placeholder="Ex.: ligar de novo, enviar apresentação"></label>
+    <label><span>Próximo contato</span><input type="date" name="nextDate" value="${addDays(todayStr(), 2)}"></label>
+    <label class="full"><span>Anotação</span><textarea name="note" rows="2"></textarea></label>
+    ${(c.leadLog || []).length ? `<div class="full"><h4>Histórico</h4><ul class="log sm">${c.leadLog.slice(0, 6).map((x) => `<li><time>${fmtShort(x.at.slice(0, 10))}</time><b>${esc((RESULTS.find((r) => r[0] === x.result) || [0, x.result])[1])}</b> ${esc(x.note || '')}</li>`).join('')}</ul></div>` : ''}
+    <div class="btns end"><button type="button" class="btn" data-act="closeModal">Cancelar</button><button class="btn primary">Salvar contato</button></div></form>`);
+}
+function leadCard(c) {
+  return `<section class="card"><header><h3>Prospecção</h3><button class="btn sm primary" data-act="leadContact" data-id="${c.id}">Registrar contato</button></header>
+    <p>Próximo contato: <b>${c.nextDate ? fmtDate(c.nextDate) : 'não marcado'}</b>${c.nextAction ? ` — ${esc(c.nextAction)}` : ''}</p>
+    ${(c.leadLog || []).length ? `<ul class="log">${c.leadLog.slice(0, 10).map((x) => `<li><time>${fmtShort(x.at.slice(0, 10))}</time><b>${esc((RESULTS.find((r) => r[0] === x.result) || [0, x.result])[1])}</b> ${esc(x.note || '')}</li>`).join('')}</ul>` : '<p class="muted">Nenhum contato registrado ainda.</p>'}</section>`;
+}
+
 // ================= VIEWS =================
 const VIEWS = {};
 
@@ -204,6 +294,7 @@ VIEWS.visao = () => {
         </div>
         <a class="btn th-btn" href="#/tarefas" data-act="tf" data-f="hoje">Ver tarefas de hoje →</a>
       </section>`; })()}
+    ${meuDiaHTML()}
     <div class="kpis k3 mini">
       <a class="kpi" href="#/clinicas"><span>Clínicas ativas</span><b>${active.length}<small> / ${goal}</small></b>
         <div class="bar"><i style="width:${Math.min(100, (active.length / goal) * 100)}%"></i></div></a>
@@ -228,20 +319,23 @@ VIEWS.visao = () => {
         <header><h3>Carga de trabalho estimada (mês)</h3><a class="link" href="#/config">Ajustar →</a></header>
         ${Object.entries(cap.people).map(([p, v]) => `<div class="cap"><div class="cap-h"><b>${p}</b><span>${v.need.toFixed(0)}h de ${v.cap}h</span></div>
           <div class="bar ${v.need > v.cap ? 'over' : ''}"><i style="width:${Math.min(100, (v.need / v.cap) * 100)}%"></i></div></div>`).join('')}
-        <p class="hint">Tarefas do mês atual de cada clínica + ${CREATIVES_PER_MONTH} criativos × ${S.settings.hoursPerCreative}h. Reuniões: ${active.length * 2}h/mês. Não inclui suporte.</p>
+        <p class="hint">Cerca de <b>${cap.perClinic.toFixed(0)}h por clínica/mês</b> (tarefas do mês + rotina diária). Com as horas atuais, cabem <b>~${cap.fits} clínicas</b>. A prospecção (${PROSPECT_MIN / 60}h/dia do Tiago) fica fora desta conta.</p>
       </section>
     </div>`;
 };
 
 function capacity() {
-  const people = {};
-  for (const p of ['Tiago', 'Micaela']) people[p] = { need: 0, cap: S.settings.capacity[p] * S.settings.workDays };
-  for (const c of S.clinics.filter((c) => ['ativo', 'onboarding'].includes(c.stage) && c.journey)) {
+  const people = {}; const wd = S.settings.workDays;
+  for (const p of ['Tiago', 'Micaela']) people[p] = { need: 0, cap: S.settings.capacity[p] * wd };
+  const list = S.clinics.filter((c) => ['ativo', 'onboarding'].includes(c.stage) && c.journey);
+  for (const c of list) {
     const n = Math.min(12, Math.max(1, currentMonth(c)));
     S.tasks.filter((t) => t.clinicId === c.id && t.month === n).forEach((t) => { if (people[t.owner]) people[t.owner].need += t.hours || 1; });
-    people.Micaela.need += CREATIVES_PER_MONTH * S.settings.hoursPerCreative;
+    DAILY_CHECKS.forEach((dc) => { if (people[dc.o]) people[dc.o].need += (dc.min * wd) / 60; });
   }
-  return { people };
+  const totalNeed = people.Tiago.need + people.Micaela.need, totalCap = people.Tiago.cap + people.Micaela.cap;
+  const perClinic = list.length ? totalNeed / list.length : 16;
+  return { people, perClinic, fits: Math.floor(totalCap / perClinic) };
 }
 
 function buildAlerts() {
@@ -368,7 +462,7 @@ VIEWS.clinicas = () => {
   const cols = STAGES;
   view().innerHTML = `
     <div class="page-h"><p class="muted">Suas clínicas por etapa. Toque em uma para abrir.</p>
-      <button class="btn primary" data-act="newClinic">+ Nova clínica</button></div>
+      <span class="btns" style="margin:0"><button class="btn" data-act="leadNew">+ Lead rápido</button><button class="btn primary" data-act="newClinic">+ Nova clínica</button></span></div>
     ${S.clinics.some((c) => c.demo) ? `<div class="notice demo-n"><span>Estas clínicas marcadas <b>DEMO</b> são só exemplo.</span><button class="btn sm danger" data-act="clearDemo">Apagar clínicas DEMO</button></div>` : ''}
     ${S.clinics.length ? `<div class="pipeline">${cols.map(([k, l]) => {
       const list = S.clinics.filter((c) => c.stage === k);
@@ -376,7 +470,7 @@ VIEWS.clinicas = () => {
         ${list.map((c) => {
           const st = c.journey ? overallFor(c) : null; const n = currentMonth(c);
           return `<a class="ccard" href="#/clinica/${c.id}"><b>${esc(c.name)}${demoBadge(c)}</b>
-            <span>${segLabel(c.segment)} · ${esc(c.city || '—')}${c.uf ? '/' + esc(c.uf) : ''}</span>
+            <span>${segLabel(c.segment)} · ${esc(c.city || '—')}${c.uf ? '/' + esc(c.uf) : ''}</span>${c.nextDate && ['lead', 'proposta', 'negociacao'].includes(c.stage) ? `<small class="${c.nextDate <= todayStr() ? 'red' : ''}">Retorno: ${fmtShort(c.nextDate)}</small>` : ''}
             ${st ? `<div class="bar sm"><i style="width:${st.p * 100}%"></i></div><small>${n > 12 ? 'Jornada encerrada' : n ? 'Mês ' + n + ' de 12' : 'Começa ' + fmtShort(c.startDate)} · ${Math.round(st.p * 100)}%</small>` : '<small>Jornada não iniciada</small>'}</a>`;
         }).join('') || '<div class="pempty">—</div>'}</section>`;
     }).join('')}</div>` : empty('Nenhuma clínica ainda. Toque em + Clínica para cadastrar a primeira.', 'clinicas')}`;
@@ -388,8 +482,9 @@ VIEWS.clinica = () => {
   const tabs = [['hoje', 'Hoje'], ['resumo', 'Resumo'], ['jornada', 'Jornada'], ['tarefas', 'Tarefas'], ['contrato', 'Contrato e garantia'], ['historico', 'Histórico']];
   const st = c.journey ? overallFor(c) : null; const n = currentMonth(c);
   let body = '';
+  const oldR = c.journey && c.journey.routinesV !== 2 ? `<div class="notice demo-n"><span>Esta clínica ainda está com as rotinas antigas. Atualize para receber o ciclo de campanha e conteúdo e as rotinas de segunda.</span><button class="btn sm primary" data-act="refreshOne" data-id="${c.id}">Atualizar rotinas</button></div>` : '';
   if (ui.clinicTab === 'hoje') {
-    body = todayHTML(c, false);
+    body = oldR + (['lead', 'proposta', 'negociacao'].includes(c.stage) ? leadCard(c) : '') + (c.journey ? todayHTML(c, false) : empty('Jornada ainda não iniciada. Quando a proposta for aceita, as tarefas aparecem aqui.', 'calendario'));
   } else if (ui.clinicTab === 'resumo') {
     const conf = conflictsFor(c);
     body = `<div class="grid2">
@@ -842,11 +937,18 @@ VIEWS.config = () => {
         <p class="hint">Usado no histórico (“quem mudou o quê”).</p>
         <h4>Tema</h4><div class="seg">${[['auto', 'Automático'], ['light', 'Claro'], ['dark', 'Escuro']].map(([k, l]) => `<button aria-selected="${st.theme === k}" data-act="theme" data-t="${k}">${l}</button>`).join('')}</div>
       </section>
-      <section class="card"><header><h3>Capacidade e metas</h3></header>
+      <section class="card"><header><h3>Meu dia, metas e capacidade</h3></header>
         <form class="mform" data-form="settings">
           <label><span>Meta de clínicas ativas</span><input type="number" name="goalClinics" value="${st.goalClinics}"></label>
-          <label><span>Horas/dia — Tiago</span><input type="number" step="0.5" name="capT" value="${st.capacity.Tiago}"></label>
-          <label><span>Horas/dia — Micaela</span><input type="number" step="0.5" name="capM" value="${st.capacity.Micaela}"></label>
+          <label><span>Operação — início</span><input type="time" name="opS" value="${st.schedule.op[0]}"></label>
+          <label><span>Operação — fim</span><input type="time" name="opE" value="${st.schedule.op[1]}"></label>
+          <label><span>Prospecção — início</span><input type="time" name="prS" value="${st.schedule.pr[0]}"></label>
+          <label><span>Prospecção — fim</span><input type="time" name="prE" value="${st.schedule.pr[1]}"></label>
+          <label><span>Meta diária — ligações</span><input type="number" name="gCalls" value="${st.goals.calls}"></label>
+          <label><span>Meta diária — conversas</span><input type="number" name="gConv" value="${st.goals.convos}"></label>
+          <label><span>Meta diária — apresentações</span><input type="number" name="gPres" value="${st.goals.pres}"></label>
+          <label><span>Horas/dia de operação — Tiago</span><input type="number" step="0.5" name="capT" value="${st.capacity.Tiago}"></label>
+          <label><span>Horas/dia de operação — Micaela</span><input type="number" step="0.5" name="capM" value="${st.capacity.Micaela}"></label>
           <label><span>Dias úteis/mês</span><input type="number" name="workDays" value="${st.workDays}"></label>
           <label><span>Horas por criativo</span><input type="number" step="0.05" name="hoursPerCreative" value="${st.hoursPerCreative}"></label>
           <label><span>Limite de revisões por criativo</span><input type="number" name="reviewLimit" value="${st.reviewLimit}"></label>
@@ -873,6 +975,9 @@ VIEWS.config = () => {
           <p class="hint">Guarde esse código (ex.: nas Notas) para colar também no celular. Use o <b>mesmo código</b> nos dois aparelhos.</p>
           <p class="hint">Conecte primeiro no aparelho que tem os dados certos (ex.: o PC) e escolha enviar os dados dele. Depois conecte o celular e escolha usar os dados da nuvem. O token fica salvo só neste aparelho e não vai no backup.</p>`}
       </section>
+      <section class="card"><header><h3>Rotinas das clínicas</h3></header>
+        <p>Aplica o ciclo de campanha e conteúdo e as rotinas de segunda nas clínicas que já têm jornada, só daqui para frente.</p>
+        <button class="btn" data-act="refreshAll">Atualizar rotinas de todas as clínicas</button></section>
       <section class="card"><header><h3>Dados</h3></header>
         <div class="btns"><button class="btn" data-act="clearDemo">Remover dados DEMO</button><button class="btn" data-act="addDemo">Recriar dados DEMO</button><button class="btn danger" data-act="wipe">Apagar tudo</button></div>
         <p class="hint">Versão 1.0 · funciona offline · instale pela opção “Adicionar à Tela de Início”.</p></section>
@@ -902,6 +1007,7 @@ function renderPanel() {
         <label><span>Prioridade</span><select data-tf="priority">${opt([['baixa', 'Baixa'], ['media', 'Média'], ['alta', 'Alta']], t.priority)}</select></label>
         <label><span>Pilar</span><select data-tf="pillar">${opt(Object.values(PILLARS).map((x) => [x.key, x.name]), t.pillar)}</select></label>
         <label><span>Horas estimadas</span><input type="number" step="0.25" data-tf="hours" value="${t.hours || 1}"></label>
+        ${t.meeting ? `<label><span>Horário da reunião</span><input type="time" data-tf="time" value="${t.time || ''}"></label>` : ''}
       </div>
       <h4>Checklist ${t.checklist.length ? `<small>${t.checklist.filter((i) => i.done).length}/${t.checklist.length}</small>` : ''}</h4>
       <ul class="cl">${t.checklist.map((i, k) => `<li><label><input type="checkbox" data-act="chk" data-i="${k}" ${i.done ? 'checked' : ''}> <span>${esc(i.t)}</span></label><button class="x" data-act="chkDel" data-i="${k}" aria-label="Remover item">×</button></li>`).join('')}</ul>
@@ -956,6 +1062,7 @@ function clinicForm(c) {
       <label><span>Mídia/mês da clínica (R$)</span><input type="number" name="mediaBudget" value="${c.mediaBudget ?? ''}"></label>
       <label><span>Implantação (R$)</span><input type="number" name="setupFee" value="${c.setupFee ?? ''}"></label>
       <label class="chkl"><input type="checkbox" name="setupWaived" ${c.setupWaived ? 'checked' : ''}> Implantação isenta</label>
+      <label class="chkl full"><input type="checkbox" name="weekends" ${c.weekends ? 'checked' : ''}> A clínica trabalha também aos fins de semana (opcional)</label>
       <label class="full"><span>Motivo da isenção</span><input name="setupReason" value="${esc(c.setupReason || '')}"></label>
       <label><span>Pagamento</span><select name="payment">${opt([['em_dia', 'Em dia'], ['pendente', 'Pendente'], ['atrasado', 'Atrasado'], ['na', 'Não se aplica']], c.payment)}</select></label>
     </fieldset>
@@ -1081,6 +1188,14 @@ document.addEventListener('click', (e) => {
       toast(willStart ? 'Cliente ativado e jornada criada' : 'Proposta marcada como aceita');
       ui.clinicTab = 'hoje'; ui.lastClinic = c.id; go('#/clinica/' + c.id);
     },
+    dailyChk: () => { const r = dayRec(); r[d.k][d.c] = !r[d.k][d.c]; if (r[d.k][d.c]) log(`${DAILY_CHECKS.find((x) => x.k === d.k).t}: ${clinicById(d.c).name}`, d.c); rerender(); },
+    cnt: () => { const r = dayRec(); r[d.k] = Math.max(0, (r[d.k] || 0) + +d.d); rerender(); },
+    prospDone: () => { const r = dayRec(); r.prospDone = !r.prospDone; if (r.prospDone) { log('Prospecção do dia concluída (2h)'); toast('Prospecção de hoje feita ✓'); } rerender(); },
+    swapBlocks: () => { const r = dayRec(); r.swap = !r.swap; rerender(); toast(r.swap ? 'Blocos trocados só por hoje' : 'Ordem normal'); },
+    leadNew: () => leadForm(),
+    leadContact: () => leadContactForm(clinicById(d.id)),
+    refreshOne: () => { const c = clinicById(d.id); if (!confirm(`Atualizar as rotinas de ${c.name}?\n\nEntram o ciclo de campanha e conteúdo e as rotinas de segunda, a partir de hoje. O que já foi feito e as reuniões não mudam.`)) return; const n = refreshRoutines(c); saveNow(); render(); toast(`${n} tarefas de rotina atualizadas`); },
+    refreshAll: () => { const list = journeyClinics(); if (!list.length) return toast('Nenhuma clínica com jornada'); if (!confirm(`Atualizar as rotinas de ${pl(list.length, 'clínica', 'clínicas')}?\n\nSó daqui para frente: o que já foi feito e as reuniões não mudam.`)) return; let n = 0; list.forEach((c) => (n += refreshRoutines(c))); saveNow(); render(); toast(`${n} tarefas de rotina atualizadas`); },
     insertAgenda: () => { const t = taskById(ui.panel.id); setTask(t, 'notes', agendaFor(t.title)); rerender(); },
     propTab: () => { ui.propTab = d.t; $('.prop-wrap').className = 'prop-wrap tab-' + d.t; $$('.prop-tabs button').forEach((b) => b.setAttribute('aria-selected', b.dataset.t === d.t)); },
     propPrint: () => { const c = clinicById(d.c); const p = c.proposals.find((x) => x.id === d.id); const old = document.title; document.title = propFileName(c, p); const back = () => { document.title = old; removeEventListener('afterprint', back); }; addEventListener('afterprint', back); log(`Gerou PDF da proposta de ${c.name}`, c.id); save(); window.print(); setTimeout(back, 3000); },
@@ -1161,25 +1276,38 @@ document.addEventListener('submit', (e) => {
     const c = isNew ? { id: uid(), createdAt: new Date().toISOString() } : clinicById(f.dataset.id);
     const oldStart = c.startDate;
     Object.assign(c, { name: g('name'), segment: g('segment'), stage: g('stage'), city: g('city'), uf: g('uf').toUpperCase(), contact: g('contact'), phone: g('phone'), humanResp: g('humanResp'),
-      startDate: g('startDate') || todayStr(), price: n('price'), baseRevenue: n('baseRevenue'), mediaBudget: n('mediaBudget'), setupFee: n('setupFee'), setupWaived: fd.get('setupWaived') === 'on', setupReason: g('setupReason'),
+      startDate: g('startDate') || todayStr(), price: n('price'), baseRevenue: n('baseRevenue'), mediaBudget: n('mediaBudget'), setupFee: n('setupFee'), setupWaived: fd.get('setupWaived') === 'on', setupReason: g('setupReason'), weekends: fd.get('weekends') === 'on',
       payment: g('payment'), territory: g('territory'), exclusivity: g('exclusivity'), guarantee: g('guarantee'), goal: g('goal'), notes: g('notes') });
     if (c.setupWaived && !c.setupReason) { alert('Informe o motivo da isenção da implantação.'); return; }
     const conf = conflictsFor(c);
     if (conf.length && c.exclusivity !== 'nao_solicitada' && !confirm(`Possível conflito de exclusividade com: ${conf.map((x) => x.name).join(', ')} (mesmo segmento e cidade).\n\nSalvar assim mesmo? A exclusividade ficará “em análise” até decisão manual.`)) return;
     if (conf.length && c.exclusivity === 'aprovada') c.exclusivity = 'em_analise';
     if (isNew) { S.clinics.push(c); log(`Cadastrou a clínica ${c.name}`, c.id); if (fd.get('start') === 'on') startJourney(c); }
-    else { log(`Editou dados da clínica ${c.name}`, c.id); if (c.journey && oldStart !== c.startDate) alert('A data de início mudou. As tarefas já geradas mantêm os prazos originais (ajuste-as individualmente se precisar).'); }
+    else { if (c.journey && !c.weekends) realignWeekends(c); log(`Editou dados da clínica ${c.name}`, c.id); if (c.journey && oldStart !== c.startDate) alert('A data de início mudou. As tarefas já geradas mantêm os prazos originais (ajuste-as individualmente se precisar).'); }
     closeModal(); save(); go('#/clinica/' + c.id); ui.clinicTab = 'hoje'; render(); toast(isNew ? 'Clínica cadastrada' : 'Clínica atualizada');
   } else if (kind === 'task') {
     const t = { id: uid(), clinicId: g('clinicId'), month: +g('month'), kind: g('kind'), pillar: g('pillar'), title: g('title'), owner: g('owner'), due: g('due') || todayStr(), priority: 'media', status: 'a_fazer', checklist: [], meeting: fd.get('meeting') === 'on', hours: 1, evidence: '', notes: '', doneAt: null, custom: true, history: [{ at: new Date().toISOString(), who: S.me, what: 'Criada manualmente' }] };
     S.tasks.push(t); log(`Criou tarefa “${t.title}”`, t.clinicId); closeModal(); rerender(); openPanel({ type: 'task', id: t.id });
   } else if (kind === 'chkAdd') {
     const t = taskById(ui.panel.id); if (!g('t')) return; t.checklist.push({ t: g('t'), done: false }); rerender(); setTimeout(() => $('#panel [name="t"]')?.focus(), 30);
+  } else if (kind === 'leadNew') {
+    const c = { id: uid(), createdAt: new Date().toISOString(), name: g('name'), phone: g('phone'), contact: g('contact'), city: g('city'), uf: '', segment: g('segment'), stage: 'lead',
+      price: 2500, setupFee: 1500, setupWaived: false, mediaBudget: null, startDate: todayStr(), payment: 'na', exclusivity: 'nao_solicitada', guarantee: 'em_definicao', nextAction: g('nextAction'), nextDate: g('nextDate') || todayStr(), leadLog: [] };
+    S.clinics.push(c); log(`Novo lead: ${c.name}`, c.id); closeModal(); saveNow(); rerender(); toast('Lead salvo');
+  } else if (kind === 'leadContact') {
+    const c = clinicById(f.dataset.id); const r = dayRec(); const res = g('result');
+    r.calls++; if (res !== 'sem_resposta') r.convos++; if (res === 'apresentacao') r.pres++;
+    c.leadLog = c.leadLog || []; c.leadLog.unshift({ at: new Date().toISOString(), who: S.me, result: res, note: g('note') });
+    if (res === 'sem_interesse') { c.stage = 'encerrado'; c.nextDate = null; c.nextAction = ''; }
+    else { c.nextDate = g('nextDate') || null; c.nextAction = g('nextAction'); if (res === 'proposta' && c.stage === 'lead') c.stage = 'proposta'; if (res === 'apresentacao' && c.stage === 'lead') c.stage = 'negociacao'; }
+    log(`Contato com ${c.name}: ${RESULTS.find((x) => x[0] === res)[1]}`, c.id); closeModal(); saveNow(); rerender(); toast('Contato registrado');
   } else if (kind === 'syncConnect') {
     const tok = g('token'); if (!tok) return;
     f.querySelector('button').disabled = true; toast('Conectando…');
     Sync.connect(tok).then((ok) => { if (ok) toast('Sincronização ligada'); else { alert('Não consegui conectar: ' + (Sync.msg || 'confira o token e a permissão Contents (Read and write) no repositório roity-mbcr-dados.')); Sync.disconnect(); } render(); });
   } else if (kind === 'settings') {
+    if (g('opS')) S.settings.schedule = { op: [g('opS'), g('opE')], pr: [g('prS'), g('prE')] };
+    if (fd.has('gCalls')) S.settings.goals = { calls: n('gCalls') ?? 30, convos: n('gConv') ?? 5, pres: n('gPres') ?? 1 };
     Object.assign(S.settings, { goalClinics: n('goalClinics') || 20, workDays: n('workDays') || 21, hoursPerCreative: n('hoursPerCreative') ?? 0.25, reviewLimit: n('reviewLimit') ?? 2 });
     S.settings.capacity = { Tiago: n('capT') ?? 4, Micaela: n('capM') ?? 4 }; save(); toast('Configurações salvas');
   } else if (kind === 'camp') {
@@ -1220,7 +1348,7 @@ document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && ui.panel
 
 // ================= início =================
 function boot() {
-  initStore(); if (fillAgendas()) saveNow(); applyTheme();
+  initStore(); if (fillAgendas()) saveNow(); if (S.daily) { const lim = addDays(todayStr(), -120); Object.keys(S.daily).forEach((k) => { if (k < lim) delete S.daily[k]; }); } applyTheme();
   $('#nav').innerHTML = NAV.map(([k, l]) => `<a href="#/${k}" data-nav="${k}" title="${l}">${icon(k)}<span>${l}</span></a>`).join('');
   const bottom = ['visao', 'mapa', 'clinicas', 'tarefas'];
   const short = { visao: 'Início', mapa: 'Mapa', clinicas: 'Clínicas', tarefas: 'Tarefas' };
