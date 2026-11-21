@@ -30,7 +30,7 @@ class MindMap {
           <g class="mm-world"></g>
         </svg>
         <div class="mm-tools">
-          <div class="mm-search"><input type="search" placeholder="Buscar no mapa…" aria-label="Buscar no mapa"></div>
+          <div class="mm-search"><input type="search" placeholder="Buscar no mapa" aria-label="Buscar no mapa"></div>
           <div class="mm-btns">
             <button data-mm="in" title="Aproximar" aria-label="Aproximar">+</button>
             <button data-mm="out" title="Afastar" aria-label="Afastar">−</button>

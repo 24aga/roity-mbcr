@@ -12,17 +12,40 @@ const clinicById = (id) => S.clinics.find((c) => c.id === id);
 const taskById = (id) => S.tasks.find((t) => t.id === id);
 const journeyClinics = () => S.clinics.filter((c) => c.journey);
 const demoBadge = (c) => (c && c.demo ? ' <span class="badge demo">DEMO</span>' : '');
+const pl = (n, one, many) => `${n} ${n === 1 ? one : many}`;
 const pill = (k, l) => `<span class="pill st-${k}">${esc(l)}</span>`;
 const pillarTag = (k) => (k ? `<span class="ptag" style="--pc:${PILLARS[k].color}">${PILLARS[k].name}</span>` : '');
 
 let route = { name: 'visao', params: [] };
 let mm = null; // instância do mapa mental
-const ui = { mapClinic: null, mapMode: 'mapa', taskFilter: 'semana', taskOwner: '', taskClinic: '', taskQuery: '', taskStatus: '', calMonth: null, resClinic: null, resMonth: null, crClinic: '', crMonth: '', kanMonth: '', clinicTab: 'hoje', panel: null };
+const ui = { mapClinic: null, mapMode: matchMedia('(max-width: 760px)').matches ? 'linha' : 'mapa', taskFilter: 'semana', taskOwner: '', taskClinic: '', taskQuery: '', taskStatus: '', calMonth: null, resClinic: null, resMonth: null, crClinic: '', crMonth: '', kanMonth: '', clinicTab: 'hoje', panel: null };
+
+// ================= ícones (SVG de linha) =================
+const ICONS = {
+  visao: '<rect x="3" y="3" width="7.5" height="7.5" rx="2"/><rect x="13.5" y="3" width="7.5" height="7.5" rx="2"/><rect x="3" y="13.5" width="7.5" height="7.5" rx="2"/><rect x="13.5" y="13.5" width="7.5" height="7.5" rx="2"/>',
+  mapa: '<circle cx="12" cy="12" r="3"/><circle cx="4.5" cy="5" r="2"/><circle cx="19.5" cy="5" r="2"/><circle cx="4.5" cy="19" r="2"/><circle cx="19.5" cy="19" r="2"/><path d="M6.1 6.4l3.6 3.4M17.9 6.4l-3.6 3.4M6.1 17.6l3.6-3.4M17.9 17.6l-3.6-3.4"/>',
+  clinicas: '<path d="M4 21V6a2 2 0 0 1 2-2h7a2 2 0 0 1 2 2v15"/><path d="M15 9h3a2 2 0 0 1 2 2v10"/><path d="M2.5 21h19M8 8h3M8 12h3M8 16h3"/>',
+  tarefas: '<rect x="3" y="3" width="18" height="18" rx="4"/><path d="M8 12.3l2.7 2.7L16.5 9.2"/>',
+  calendario: '<rect x="3" y="4.5" width="18" height="16.5" rx="3"/><path d="M3 9.5h18M8 2.5v4M16 2.5v4"/>',
+  criativos: '<rect x="3" y="3" width="18" height="18" rx="4"/><circle cx="9" cy="9" r="1.8"/><path d="M21 15.5l-5-5L5.5 21"/>',
+  apresentar: '<rect x="2.5" y="3.5" width="19" height="13" rx="2.5"/><path d="M10.2 7.6v4.8l4.2-2.4z"/><path d="M8.5 21h7M12 16.5V21"/>',
+  financeiro: '<rect x="2.5" y="5.5" width="19" height="14" rx="3"/><path d="M2.5 10h19M16.5 15h2"/>',
+  config: '<path d="M4 6.5h9M17 6.5h3M4 12h3M11 12h9M4 17.5h11M19 17.5h1"/><circle cx="15" cy="6.5" r="2"/><circle cx="9" cy="12" r="2"/><circle cx="17" cy="17.5" r="2"/>',
+  mais: '<circle cx="5" cy="12" r="1.3"/><circle cx="12" cy="12" r="1.3"/><circle cx="19" cy="12" r="1.3"/>',
+  plus: '<path d="M12 5v14M5 12h14"/>',
+  sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.3 5.3l1.4 1.4M17.3 17.3l1.4 1.4M5.3 18.7l1.4-1.4M17.3 6.7l1.4-1.4"/>',
+  moon: '<path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/>',
+  cloud: '<path d="M7 18.5h10a4 4 0 0 0 .6-7.95A6 6 0 0 0 6.2 9.6 4.5 4.5 0 0 0 7 18.5z"/>',
+  cloudOk: '<path d="M7 18.5h10a4 4 0 0 0 .6-7.95A6 6 0 0 0 6.2 9.6 4.5 4.5 0 0 0 7 18.5z"/><path d="M9.5 13.6l1.8 1.8 3.4-3.6"/>',
+  sync: '<path d="M20 12a8 8 0 0 1-14.3 4.9M4 12A8 8 0 0 1 18.3 7.1"/><path d="M18.5 3v4.3h-4.3M5.5 21v-4.3h4.3"/>',
+  alert: '<path d="M12 3.5l9.5 16.5h-19z"/><path d="M12 10v4.5M12 17.3v.2"/>',
+};
+const icon = (n, cls = '') => `<svg class="ic ${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[n] || ''}</svg>`;
 
 // ================= roteamento =================
 const NAV = [
   ['visao', 'Visão geral', '◧'], ['mapa', 'Mapa MBCR', '✳'], ['clinicas', 'Clínicas', '⌂'], ['tarefas', 'Tarefas', '☑'],
-  ['calendario', 'Calendário', '▦'], ['criativos', 'Criativos', '✎'], ['apresentar', 'Apresentar ao cliente', '▶'],
+  ['calendario', 'Calendário', ''], ['criativos', 'Criativos', ''], ['apresentar', 'Apresentar ao cliente', ''],
   ['financeiro', 'Financeiro', 'R$'], ['config', 'Configurações', '⚙'],
 ];
 function parseRoute() {
@@ -128,7 +151,7 @@ function todayHTML(c, compact) {
     ${grp('Fazer hoje', p.hoje, 'today', true)}
     ${grp('Começar agora (vence em até 2 dias)', p.comecar, 'soon', true)}
     ${grp('Mais adiante nesta semana', p.semana, 'later', false)}
-    ${crs ? `<div class="notice">✎ ${crs} criativo(s) do mês ainda em produção. <a href="#/criativos" data-act="goCr" data-c="${c.id}" data-n="${p.n}">Ver criativos</a></div>` : ''}
+    ${crs ? `<div class="notice">✎ ${pl(crs, 'criativo do mês ainda em produção', 'criativos do mês ainda em produção')}. <a href="#/criativos" data-act="goCr" data-c="${c.id}" data-n="${p.n}">Ver criativos</a></div>` : ''}
     ${p.feitoHoje.length ? `<h4 class="dg done">Feito hoje <small>${p.feitoHoje.length}</small></h4><ul class="tlist">${p.feitoHoje.map((t) => taskRow(t, { day: true })).join('')}</ul>` : ''}`;
 }
 
@@ -164,13 +187,13 @@ VIEWS.visao = () => {
     ${(() => { const real = S.clinics.some((c) => !c.demo); const lb = S.settings.lastBackup; const days = lb ? diffDays(lb, today) : null;
       return real && !Sync.enabled() && (days == null || days >= 7) ? `<div class="notice warn demo-n"><span>💾 ${days == null ? 'Você ainda não fez nenhum backup.' : `Último backup há ${days} dias.`} Seus dados ficam só neste aparelho.</span><button class="btn sm primary" data-act="exportJSON">Baixar backup agora</button></div>` : ''; })()}
     <div class="hello"><small>${fmtDate(today, { weekday: 'long', day: '2-digit', month: 'long' })}</small><h2>${hello}, ${esc(S.me)}.</h2>
-      <p>${overdue.length ? `<b class="red">${overdue.length} entrega(s) atrasada(s)</b> · ` : ''}${upcoming.length ? `${open.filter((t) => t.due <= wEnd).length} entrega(s) até ${fmtShort(wEnd)}` : 'Nada vencendo esta semana'} · ${meetings.length} reunião(ões)</p></div>
+      <p>${overdue.length ? `<b class="red">${pl(overdue.length, 'entrega atrasada', 'entregas atrasadas')}</b> · ` : ''}${upcoming.length ? `${pl(open.filter((t) => t.due <= wEnd).length, 'entrega', 'entregas')} até ${fmtShort(wEnd)}` : 'Nada vencendo esta semana'} · ${pl(meetings.length, 'reunião', 'reuniões')}</p></div>
     <div class="kpis k4">
       <a class="kpi" href="#/clinicas"><span>Clínicas ativas</span><b>${active.length}<small> / ${goal}</small></b>
         <div class="bar"><i style="width:${Math.min(100, (active.length / goal) * 100)}%"></i></div></a>
-      <a class="kpi" href="#/financeiro"><span>MRR contratado</span><b>${money(mrr)}</b><em>Meta: ${money(goal * 2500)}</em></a>
+      <a class="kpi" href="#/financeiro"><span>Receita mensal</span><b>${money(mrr)}</b><em>Meta: ${money(goal * 2500)}</em></a>
       <a class="kpi ${overdue.length ? 'warn' : ''}" href="#/tarefas" data-act="tf" data-f="atrasadas"><span>Atrasadas</span><b>${overdue.length}</b><em>${todayT.length} para hoje</em></a>
-      <a class="kpi" href="#/criativos"><span>Criativos em produção</span><b>${pendingCr.length}</b><em>${onb.length} clínica(s) em onboarding</em></a>
+      <a class="kpi" href="#/criativos"><span>Criativos em produção</span><b>${pendingCr.length}</b><em>No mês atual das clínicas</em></a>
     </div>
     <h3 class="sec-t">Hoje em cada clínica</h3>
     ${weekClinics.length ? `<div class="wk">${weekClinics.map(({ c, n, tasks, st }) => `
@@ -212,7 +235,7 @@ function buildAlerts() {
     if (c.journey && ['ativo', 'onboarding'].includes(c.stage)) {
       const n = currentMonth(c);
       const bl = S.tasks.filter((t) => t.clinicId === c.id && t.status === 'bloqueado');
-      if (bl.length) out.push({ k: 'warn', t: `${c.name}: ${bl.length} tarefa(s) bloqueada(s)`, d: bl.slice(0, 2).map((t) => esc(t.title)).join(' · ') });
+      if (bl.length) out.push({ k: 'warn', t: `${c.name}: ${pl(bl.length, 'tarefa bloqueada', 'tarefas bloqueadas')}`, d: bl.slice(0, 2).map((t) => esc(t.title)).join(' · ') });
       if (n === 6 || n === 5) out.push({ k: 'warn', t: `${c.name}: avaliação do 1º ciclo se aproxima`, d: 'Garantia só conforme termos assinados e revisão humana/jurídica.' });
       if (n === 10 || n === 11) out.push({ k: 'info', t: `${c.name}: decisão de mídia dos meses 11–12`, d: 'Registrar se pausa (padrão) ou mantém tráfego, com aprovação da clínica.' });
     }
@@ -243,14 +266,14 @@ VIEWS.mapa = () => {
   if (ui.mapClinic === null && cl.length && ui.mapClinicInit !== true) { ui.mapClinic = cl[0].id; }
   ui.mapClinicInit = true;
   const clinic = ui.mapClinic ? clinicById(ui.mapClinic) : null;
-  const modes = [['mapa', 'Mapa mental'], ['linha', 'Linha do tempo'], ['kanban', 'Kanban'], ['lista', 'Lista']];
+  const modes = [['mapa', 'Mapa mental', 'Mapa'], ['linha', 'Linha do tempo', 'Linha'], ['kanban', 'Kanban', 'Kanban'], ['lista', 'Lista', 'Lista']];
   view().innerHTML = `
     <div class="map-head">
       <label class="sel"><span>Visão</span><select data-act="mapClinic">
         <option value="">Método MBCR (modelo geral)</option>
         ${cl.map((c) => `<option value="${c.id}"${clinic && c.id === clinic.id ? ' selected' : ''}>${esc(c.name)}</option>`).join('')}
       </select></label>
-      <div class="seg" role="tablist">${modes.map(([k, l]) => `<button role="tab" aria-selected="${ui.mapMode === k}" data-act="mapMode" data-m="${k}">${l}</button>`).join('')}</div>
+      <div class="seg" role="tablist">${modes.map(([k, l, sh]) => `<button role="tab" aria-selected="${ui.mapMode === k}" data-act="mapMode" data-m="${k}"><span class="l-long">${l}</span><span class="l-short">${sh}</span></button>`).join('')}</div>
       ${clinic ? `<div class="map-prog">${progressInline(overallFor(clinic))}<span>Mês atual: <b>${currentMonth(clinic) > 12 ? 'encerrada' : currentMonth(clinic) || 'não iniciou'}</b></span></div>` : '<div class="map-prog muted">Modelo: sem status. Escolha uma clínica para acompanhar.</div>'}
     </div>
     <div id="mapBody" class="map-body mode-${ui.mapMode}"></div>`;
@@ -320,7 +343,7 @@ function kanbanHTML(clinic) {
 function listHTML(clinic) {
   return MONTHS.map((m) => {
     const md = monthData(clinic, m.n);
-    return `<section class="card list-m"><header><h3><span class="mnum" style="background:${PILLARS[md.pillars[0]].color}">${m.n}</span>${esc(md.title)}</h3>${md.state ? pill(md.state.k, md.state.l + ' · ' + Math.round(md.state.p * 100) + '%') : ''}</header>
+    return `<section class="card list-m"><header><h3><span class="mnum" style="--pc:${PILLARS[md.pillars[0]].color}">${m.n}</span>${esc(md.title)}</h3>${md.state ? pill(md.state.k, md.state.l + ' · ' + Math.round(md.state.p * 100) + '%') : ''}</header>
       ${clinic ? `<ul class="tlist">${md.tasks.map(taskRow).join('')}</ul>` : `<ul class="plain">${md.novo.map((t) => `<li>${pillarTag(t.pillar)} ${esc(t.title)} <small>· ${t.owner}</small></li>`).join('')}</ul>`}</section>`;
   }).join('');
 }
@@ -329,7 +352,7 @@ function listHTML(clinic) {
 VIEWS.clinicas = () => {
   const cols = STAGES;
   view().innerHTML = `
-    <div class="page-h"><p class="muted">Pipeline de clínicas (clientes da Roity). Toque numa clínica para abrir, editar ou excluir.</p>
+    <div class="page-h"><p class="muted">Suas clínicas por etapa. Toque em uma para abrir.</p>
       <button class="btn primary" data-act="newClinic">+ Nova clínica</button></div>
     ${S.clinics.some((c) => c.demo) ? `<div class="notice demo-n"><span>Estas clínicas marcadas <b>DEMO</b> são só exemplo.</span><button class="btn sm danger" data-act="clearDemo">Apagar clínicas DEMO</button></div>` : ''}
     ${S.clinics.length ? `<div class="pipeline">${cols.map(([k, l]) => {
@@ -400,8 +423,9 @@ VIEWS.clinica = () => {
     body = `<section class="card"><ul class="log">${l.map(logItem).join('') || empty('Sem histórico.')}</ul></section>`;
   }
   view().innerHTML = `
-    <div class="ch"><div class="ch-top"><a href="#/clinicas" class="back">← Clínicas</a><span class="btns" style="margin:0"><a class="btn sm primary" href="#/proposta/${c.id}">Gerar proposta</a><button class="btn sm" data-act="editClinic" data-id="${c.id}">Editar</button><button class="btn sm danger" data-act="delClinic" data-id="${c.id}">Excluir clínica</button></span></div>
-      <h2>${esc(c.name)}${demoBadge(c)}</h2><span class="muted">${segLabel(c.segment)} · ${esc(c.city || '')} · ${stageLabel(c.stage)}</span></div>
+    <div class="ch"><a href="#/clinicas" class="back">← Clínicas</a>
+      <div class="ch-row"><div class="ch-title"><h2>${esc(c.name)}${demoBadge(c)}</h2><span class="muted">${[segLabel(c.segment), c.city, stageLabel(c.stage)].filter(Boolean).map(esc).join(' · ')}</span></div>
+      <div class="ch-actions"><a class="btn primary" href="#/proposta/${c.id}">Gerar proposta</a><button class="btn" data-act="editClinic" data-id="${c.id}">Editar</button><button class="btn danger" data-act="delClinic" data-id="${c.id}">Excluir</button></div></div></div>
     <div class="tabs">${tabs.map(([k, l]) => `<button class="${ui.clinicTab === k ? 'on' : ''}" data-act="clinicTab" data-t="${k}">${l}</button>`).join('')}</div>
     ${body}`;
 };
@@ -433,15 +457,15 @@ VIEWS.tarefas = () => {
   view().innerHTML = `
     <div class="seg wrap">${filters.map(([k, l]) => `<button aria-selected="${f === k}" data-act="tf" data-f="${k}">${l}</button>`).join('')}</div>
     <div class="filters">
-      <input type="search" placeholder="Buscar tarefa…" value="${esc(ui.taskQuery)}" data-act="tq" aria-label="Buscar tarefa">
-      <select data-act="towner" aria-label="Responsável"><option value="">Todos os responsáveis</option>${optS(OWNERS, ui.taskOwner)}</select>
-      <select data-act="tclinic" aria-label="Clínica"><option value="">Todas as clínicas</option>${S.clinics.map((c) => `<option value="${c.id}"${c.id === ui.taskClinic ? ' selected' : ''}>${esc(c.name)}</option>`).join('')}</select>
-      <select data-act="tstatus" aria-label="Status"><option value="">Qualquer status</option>${opt(TASK_STATUS, ui.taskStatus)}</select>
+      <input type="search" placeholder="Buscar tarefa" value="${esc(ui.taskQuery)}" data-act="tq" aria-label="Buscar tarefa">
+      <select data-act="towner" aria-label="Responsável"><option value="">Responsável: todos</option>${optS(OWNERS, ui.taskOwner)}</select>
+      <select data-act="tclinic" aria-label="Clínica"><option value="">Clínica: todas</option>${S.clinics.map((c) => `<option value="${c.id}"${c.id === ui.taskClinic ? ' selected' : ''}>${esc(c.name)}</option>`).join('')}</select>
+      <select data-act="tstatus" aria-label="Status"><option value="">Status: todos</option>${opt(TASK_STATUS, ui.taskStatus)}</select>
       <button class="btn sm" data-act="newTask">+ Tarefa</button>
     </div>
     <div class="bulk" hidden><span></span><button class="btn sm" data-act="bulkDone">Concluir selecionadas</button><select data-act="bulkOwner"><option value="">Atribuir a…</option>${optS(OWNERS)}</select></div>
     ${list.length ? Object.entries(groups).map(([cid, ts]) => `<section class="card"><header><h3>${esc(clinicById(cid).name)}${demoBadge(clinicById(cid))}</h3><span class="muted">${ts.length}</span></header>
-      <ul class="tlist sel">${ts.map((t) => `<li class="sel-wrap"><input type="checkbox" class="bsel" value="${t.id}" aria-label="Selecionar ${esc(t.title)}">${taskRow(t).replace(/^<li[^>]*>|<\/li>$/g, '')}</li>`).join('')}</ul></section>`).join('') + (list.length > 300 ? '<p class="hint">Mostrando as 300 primeiras. Use os filtros.</p>' : '') : empty('Nenhuma tarefa com esses filtros.')}`;
+      <ul class="tlist tsel">${ts.map((t) => `<li class="sel-wrap"><input type="checkbox" class="bsel" value="${t.id}" aria-label="Selecionar ${esc(t.title)}">${taskRow(t).replace(/^<li[^>]*>|<\/li>$/g, '')}</li>`).join('')}</ul></section>`).join('') + (list.length > 300 ? '<p class="hint">Mostrando as 300 primeiras. Use os filtros.</p>' : '') : empty('Nenhuma tarefa com esses filtros.')}`;
 };
 
 // ---------- Calendário ----------
@@ -488,7 +512,7 @@ VIEWS.criativos = () => {
       <select data-act="crMonth" aria-label="Mês">${MONTHS.map((x) => `<option value="${x.n}"${x.n === m ? ' selected' : ''}>Mês ${x.n}${x.n === cur ? ' (atual)' : ''}</option>`).join('')}</select>
     </div>
     <div class="notice">Até <b>${CREATIVES_PER_MONTH} criativos/mês</b> — é um teto, não obrigação. Marque “Não necessário” quando uma peça boa continuar rodando. Limite de revisões: ${S.settings.reviewLimit} por peça.</div>
-    <div class="cr-count"><b>${used}</b> de ${CREATIVES_PER_MONTH} em uso no mês ${m} · ${list.filter((x) => x.type === 'video' && x.status !== 'nao_necessario').length} vídeo(s) · ${list.filter((x) => x.type === 'imagem' && x.status !== 'nao_necessario').length} imagem(ns)</div>
+    <div class="cr-count"><b>${used}</b> de ${CREATIVES_PER_MONTH} em uso no mês ${m} · ${(() => { const v = list.filter((x) => x.type === 'video' && x.status !== 'nao_necessario').length; return pl(v, 'vídeo', 'vídeos'); })()} · ${list.filter((x) => x.type === 'imagem' && x.status !== 'nao_necessario').length} imagens</div>
     <div class="crgrid">${list.map((x) => `<article class="crc st-${x.status}">
       <header><b>#${x.slot}</b><select data-act="crf" data-id="${x.id}" data-f="type" aria-label="Tipo">${opt([['video', 'Vídeo curto'], ['imagem', 'Imagem']], x.type)}</select></header>
       <input data-act="crf" data-id="${x.id}" data-f="title" placeholder="Título / ideia" value="${esc(x.title)}" aria-label="Título">
@@ -560,7 +584,7 @@ VIEWS.apresentar = () => {
       <select data-act="presClinic" aria-label="Preparar para">
         <option value="">Apresentação geral</option>${S.clinics.map((x) => `<option value="${x.id}"${c && x.id === c.id ? ' selected' : ''}>Para: ${esc(x.name)}</option>`).join('')}
       </select>
-      <span class="btns" style="margin:0">${c ? `<a class="btn sm" href="#/proposta/${c.id}">Gerar proposta</a>` : ''}<button class="theme-btn" data-act="themeToggle" aria-label="Alternar modo claro/escuro">${isDark() ? '☀' : '☾'}</button><a class="btn sm" href="#/visao">Sair da apresentação</a></span>
+      <span class="btns" style="margin:0">${c ? `<a class="btn sm" href="#/proposta/${c.id}">Gerar proposta</a>` : ''}<button class="theme-btn" data-act="themeToggle" aria-label="Alternar modo claro/escuro">${icon(isDark() ? 'sun' : 'moon')}</button><a class="btn sm" href="#/visao">Sair da apresentação</a></span>
     </div>
     <section class="pres-hero">
       <img class="pres-logo" src="icons/logo-white.png" alt="ROITY"><div class="pres-wsub">Assessoria Empresarial · Método MBCR</div>
@@ -778,16 +802,16 @@ VIEWS.financeiro = () => {
   const cap = capacity(); const hours = Object.values(cap.people).reduce((a, p) => a + p.need, 0);
   view().innerHTML = `
     <div class="kpis">
-      <div class="kpi"><span>MRR bruto contratado</span><b>${money(mrr)}</b><em>${act.length} clínica(s) ativa(s)/onboarding</em></div>
-      <div class="kpi"><span>Anualizado (estável)</span><b>${money(mrr * 12)}</b><em>antes de custos, impostos e churn</em></div>
-      <div class="kpi"><span>Meta</span><b>${money(S.settings.goalClinics * 2500)}</b><em>${S.settings.goalClinics} × R$ 2.500 — meta, não receita</em></div>
-      <div class="kpi"><span>Implantações contratadas</span><b>${money(setup)}</b><em>não isentas</em></div>
-      <div class="kpi"><span>Receita por hora estimada</span><b>${hours ? money(mrr / hours) : 'não informado'}</b><em>${hours.toFixed(0)}h/mês estimadas</em></div>
+      <div class="kpi"><span>Receita mensal (MRR)</span><b>${money(mrr)}</b><em>${pl(act.length, 'clínica ativa ou em onboarding', 'clínicas ativas ou em onboarding')}</em></div>
+      <div class="kpi"><span>Projeção em 12 meses</span><b>${money(mrr * 12)}</b><em>Antes de custos e impostos</em></div>
+      <div class="kpi"><span>Meta mensal</span><b>${money(S.settings.goalClinics * 2500)}</b><em>${S.settings.goalClinics} clínicas × R$ 2.500</em></div>
+      <div class="kpi"><span>Implantações</span><b>${money(setup)}</b><em>Contratadas, sem isenção</em></div>
+      <div class="kpi"><span>Receita por hora</span><b>${hours ? money(mrr / hours) : 'não informado'}</b><em>${hours.toFixed(0)}h/mês de trabalho estimadas</em></div>
     </div>
     <div class="notice">Verba de mídia é dinheiro da clínica pago à plataforma — <b>não</b> entra no faturamento da Roity.</div>
-    <section class="card"><header><h3>Contratos</h3></header><div class="tscroll"><table class="tbl"><thead><tr><th>Clínica</th><th>Etapa</th><th>Honorários</th><th>Implantação</th><th>Pagamento</th><th>Mídia (clínica)</th></tr></thead><tbody>
-      ${S.clinics.map((c) => `<tr><td><a href="#/clinica/${c.id}">${esc(c.name)}</a>${demoBadge(c)}</td><td>${stageLabel(c.stage)}</td><td>${money(c.price)}</td><td>${c.setupWaived ? 'Isenta' : money(c.setupFee)}</td>
-        <td><select data-act="pay" data-id="${c.id}" aria-label="Pagamento">${opt([['em_dia', 'Em dia'], ['pendente', 'Pendente'], ['atrasado', 'Atrasado'], ['na', 'Não se aplica']], c.payment)}</select></td><td>${money(c.mediaBudget)}</td></tr>`).join('')}
+    <section class="card"><header><h3>Contratos</h3></header><div class="tscroll"><table class="tbl rtbl"><thead><tr><th>Clínica</th><th>Etapa</th><th>Honorários</th><th>Implantação</th><th>Pagamento</th><th>Mídia (clínica)</th></tr></thead><tbody>
+      ${S.clinics.map((c) => `<tr><td data-l="Clínica"><a href="#/clinica/${c.id}">${esc(c.name)}</a>${demoBadge(c)}</td><td data-l="Etapa">${stageLabel(c.stage)}</td><td data-l="Honorários">${money(c.price)}</td><td data-l="Implantação">${c.setupWaived ? 'Isenta' : money(c.setupFee)}</td>
+        <td data-l="Pagamento"><select data-act="pay" data-id="${c.id}" aria-label="Pagamento">${opt([['em_dia', 'Em dia'], ['pendente', 'Pendente'], ['atrasado', 'Atrasado'], ['na', 'Não se aplica']], c.payment)}</select></td><td data-l="Mídia (clínica)">${money(c.mediaBudget)}</td></tr>`).join('')}
     </tbody></table></div><p class="hint">Contas a receber, recebimentos e custos detalhados ficam para a Fase 2.</p></section>`;
 };
 
@@ -963,9 +987,9 @@ function toCSV(rows, cols) {
 }
 function renderSyncBadge() {
   const b = document.getElementById('syncBadge'); if (!b) return;
-  const map = { off: ['☁', 'Sincronizar', 'off'], ok: ['✓', 'Sincronizado', 'ok'], syncing: ['↻', 'Sincronizando…', 'busy'], offline: ['⚠', 'Offline', 'warn'], error: ['⚠', 'Erro na sincronização', 'err'], conflict: ['⚠', 'Conflito', 'warn'] };
+  const map = { off: ['cloud', 'Sincronizar', 'off'], ok: ['cloudOk', 'Sincronizado', 'ok'], syncing: ['sync', 'Sincronizando', 'busy'], offline: ['alert', 'Offline', 'warn'], error: ['alert', 'Erro ao sincronizar', 'err'], conflict: ['alert', 'Conflito', 'warn'] };
   const [i, l, k] = map[Sync.state] || map.off;
-  b.className = 'sync-b ' + k; b.innerHTML = `<span>${i}</span><em>${l}</em>`; b.title = Sync.msg || l;
+  b.className = 'sync-b ' + k; b.innerHTML = `${icon(i)}<em>${l}</em>`; b.title = Sync.msg || l;
   if (route.name === 'config') { const st = document.getElementById('syncState'); if (st) st.textContent = l + (Sync.msg ? ' — ' + Sync.msg : ''); }
 }
 function onRemoteApplied() {
@@ -978,7 +1002,7 @@ function isDark() { const t = S.settings.theme; return t === 'dark' || (t === 'a
 function applyTheme() {
   const t = S.settings.theme; const root = document.documentElement;
   if (t === 'auto') root.removeAttribute('data-theme'); else root.dataset.theme = t;
-  const b = document.getElementById('themeBtn'); if (b) { b.textContent = isDark() ? '☀' : '☾'; b.title = isDark() ? 'Modo claro' : 'Modo escuro'; }
+  const b = document.getElementById('themeBtn'); if (b) { b.innerHTML = icon(isDark() ? 'sun' : 'moon'); b.title = isDark() ? 'Modo claro' : 'Modo escuro'; }
   document.querySelector('meta[name="theme-color"]')?.setAttribute('content', isDark() ? '#010103' : '#f3f5fb');
 }
 
@@ -1022,7 +1046,7 @@ document.addEventListener('click', (e) => {
       if (d.k === 'clinics') download('clinicas.csv', toCSV(S.clinics, ['name', 'segment', 'city', 'uf', 'stage', 'price', 'setupFee', 'setupWaived', 'mediaBudget', 'baseRevenue', 'startDate', 'payment', 'exclusivity', 'territory', 'demo']), 'text/csv');
       if (d.k === 'tasks') download('tarefas.csv', toCSV(S.tasks.map((t) => ({ ...t, clinica: clinicById(t.clinicId)?.name, statusLabel: statusName(t.status) })), ['clinica', 'month', 'kind', 'pillar', 'title', 'owner', 'due', 'statusLabel', 'doneAt', 'evidence']), 'text/csv');
     },
-    clearDemo: () => { const ds = S.clinics.filter((c) => c.demo); if (!ds.length) return toast('Não há dados DEMO'); if (confirm(`Apagar ${ds.length} clínica(s) DEMO e todas as tarefas delas? Suas clínicas reais não são afetadas.`)) { ds.forEach((c) => deleteClinic(c.id)); if (ds.some((c) => c.id === ui.mapClinic)) ui.mapClinic = null; log('Removeu dados DEMO'); saveNow(); render(); toast('Clínicas DEMO apagadas'); } },
+    clearDemo: () => { const ds = S.clinics.filter((c) => c.demo); if (!ds.length) return toast('Não há dados DEMO'); if (confirm(`Apagar ${pl(ds.length, 'clínica', 'clínicas')} DEMO e todas as tarefas delas? Suas clínicas reais não são afetadas.`)) { ds.forEach((c) => deleteClinic(c.id)); if (ds.some((c) => c.id === ui.mapClinic)) ui.mapClinic = null; log('Removeu dados DEMO'); saveNow(); render(); toast('Clínicas DEMO apagadas'); } },
     addDemo: () => { seedDemo(); save(); render(); toast('Dados DEMO criados'); },
     wipe: () => { if (confirm('Apagar TODOS os dados deste aparelho? Faça backup antes.') && confirm('Tem certeza? Não dá para desfazer.')) { const me = S.me; S = defaultState(); S.me = me; saveNow(); render(); toast('Tudo apagado'); } },
     print: () => window.print(),
@@ -1060,18 +1084,18 @@ document.addEventListener('change', (e) => {
     importJSON: () => {
       const f = el.files[0]; if (!f) return; const r = new FileReader();
       r.onload = () => { try { const data = JSON.parse(r.result); if (!data.clinics || !data.tasks) throw new Error('arquivo não parece um backup do app');
-        if (!confirm(`Restaurar backup com ${data.clinics.length} clínica(s)? Os dados atuais deste aparelho serão substituídos.`)) return;
+        if (!confirm(`Restaurar backup com ${pl(data.clinics.length, 'clínica', 'clínicas')}? Os dados atuais deste aparelho serão substituídos.`)) return;
         S = Object.assign(defaultState(), data, { settings: Object.assign(defaultState().settings, data.settings) }); log('Restaurou backup'); saveNow(); applyTheme(); render(); toast('Backup restaurado'); } catch (err) { alert('Não foi possível restaurar: ' + err.message); } };
       r.readAsText(f);
     },
     bsel: () => {},
   };
   if (H[d.act]) H[d.act]();
-  if (el.classList.contains('bsel')) { const n = $$('.bsel:checked').length; const b = $('.bulk'); b.hidden = !n; b.querySelector('span').textContent = `${n} selecionada(s)`; }
+  if (el.classList.contains('bsel')) { const n = $$('.bsel:checked').length; const b = $('.bulk'); b.hidden = !n; b.querySelector('span').textContent = `${pl(n, 'selecionada', 'selecionadas')}`; }
   if (d.act === 'bulkOwner' && el.value) { $$('.bsel:checked').forEach((c) => setTask(taskById(c.value), 'owner', el.value)); rerender(); toast('Responsável atualizado'); }
 });
 document.addEventListener('click', (e) => {
-  if (e.target.closest('[data-act="bulkDone"]')) { const ids = $$('.bsel:checked').map((c) => c.value); ids.forEach((id) => setTask(taskById(id), 'status', 'concluido')); rerender(); toast(`${ids.length} tarefa(s) concluída(s)`); }
+  if (e.target.closest('[data-act="bulkDone"]')) { const ids = $$('.bsel:checked').map((c) => c.value); ids.forEach((id) => setTask(taskById(id), 'status', 'concluido')); rerender(); toast(`${pl(ids.length, 'tarefa concluída', 'tarefas concluídas')}`); }
 });
 let tqTimer;
 document.addEventListener('input', (e) => {
@@ -1126,10 +1150,12 @@ document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && ui.panel
 // ================= início =================
 function boot() {
   initStore(); applyTheme();
-  $('#nav').innerHTML = NAV.map(([k, l, i]) => `<a href="#/${k}" data-nav="${k}"><span class="ni" aria-hidden="true">${i}</span><span>${l}</span></a>`).join('');
+  $('#nav').innerHTML = NAV.map(([k, l]) => `<a href="#/${k}" data-nav="${k}" title="${l}">${icon(k)}<span>${l}</span></a>`).join('');
   const bottom = ['visao', 'mapa', 'clinicas', 'tarefas'];
-  $('#bottomNav').innerHTML = bottom.map((k) => { const n = NAV.find((x) => x[0] === k); return `<a href="#/${k}" data-nav="${k}"><span class="ni" aria-hidden="true">${n[2]}</span><span>${n[1].split(' ')[0]}</span></a>`; }).join('') + `<a href="#" data-act="more"><span class="ni" aria-hidden="true">⋯</span><span>Mais</span></a>`;
-  $('#moreSheet').innerHTML = NAV.filter((n) => !bottom.includes(n[0])).map(([k, l, i]) => `<a href="#/${k}" data-nav="${k}"><span class="ni">${i}</span>${l}</a>`).join('');
+  const short = { visao: 'Início', mapa: 'Mapa', clinicas: 'Clínicas', tarefas: 'Tarefas' };
+  $('#bottomNav').innerHTML = bottom.map((k) => `<a href="#/${k}" data-nav="${k}">${icon(k)}<span>${short[k]}</span></a>`).join('') + `<a href="#" data-act="more">${icon('mais')}<span>Mais</span></a>`;
+  $('#moreSheet').innerHTML = NAV.filter((n) => !bottom.includes(n[0])).map(([k, l]) => `<a href="#/${k}" data-nav="${k}">${icon(k)}<span>${l}</span></a>`).join('');
+  $('#quickAdd').innerHTML = `${icon('plus')}<span>Clínica</span>`;
   $('#moreSheet').addEventListener('click', () => ($('#moreSheet').hidden = true));
   $('#panelClose').addEventListener('click', closePanel);
   $('#scrim').addEventListener('click', closePanel);
