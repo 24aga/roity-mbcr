@@ -1058,3 +1058,15 @@ body.noscroll { overflow: hidden; }
 .lcity { color: var(--ink); font-weight: 650; }
 .cm-res .btn { white-space: normal; line-height: 1.2; padding: 6px 10px; }
 @media (max-width: 420px) { .cm-res .btn { font-size: 14px; } }
+
+/* base de leads */
+.pool { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; }
+.pool-uf { border: 1px solid var(--line); border-radius: 16px; padding: 14px; display: flex; flex-direction: column; gap: 8px; background: color-mix(in srgb, var(--bg2) 40%, transparent); }
+.pool-h { display: flex; align-items: baseline; gap: 10px; } .pool-h b { font-family: var(--font-d); font-size: 24px; color: var(--accent); } .pool-h span { color: var(--muted); font-size: 13px; }
+.pool-uf small { color: var(--muted); font-size: 13px; } .pool-uf small b { color: var(--ink); }
+.pool-top { display: flex; flex-wrap: wrap; gap: 4px; } .pool-top span { font-size: 12px; background: var(--card); border: 1px solid var(--line); border-radius: 99px; padding: 2px 8px; color: var(--ink2); }
+.pool-uf .btn { align-self: flex-start; }
+.q-cs { width: 100%; margin-bottom: 8px; }
+.q-cities { display: flex; flex-wrap: wrap; gap: 6px; max-height: 190px; overflow-y: auto; padding: 2px; }
+.q-cities .chip { cursor: pointer; display: inline-flex; gap: 5px; align-items: center; } .q-cities .chip small { color: var(--muted); font-weight: 500; }
+.imp h4 small { text-transform: none; letter-spacing: 0; font-weight: 500; }

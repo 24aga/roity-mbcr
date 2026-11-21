@@ -164,6 +164,8 @@ function dayRec(d = todayStr()) {
   S.daily = S.daily || {};
   return (S.daily[d] = S.daily[d] || { mon: {}, msg: {}, calls: 0, convos: 0, pres: 0, prospDone: false, swap: false });
 }
+function prospRec(d) { const r = dayRec(d); r.p = r.p || {}; return (r.p[S.me] = r.p[S.me] || { calls: 0, convos: 0, pres: 0, prospDone: false }); }
+const mine = (c) => !c.owner || c.owner === S.me;
 const isWeekday = (d) => { const w = parseD(d).getDay(); return w >= 1 && w <= 5; };
 const opClinics = () => journeyClinics().filter((c) => ['ativo', 'onboarding'].includes(c.stage));
 const leadClinics = () => S.clinics.filter((c) => ['lead', 'proposta', 'negociacao'].includes(c.stage));
@@ -176,7 +178,7 @@ function dayBlocks(rec) {
 }
 function weekTotals() {
   const t = todayStr(); const d0 = addDays(t, -((parseD(t).getDay() + 6) % 7)); const sum = { calls: 0, convos: 0, pres: 0 };
-  for (let d = d0; d <= t; d = addDays(d, 1)) { const r = (S.daily || {})[d]; if (r) { sum.calls += r.calls; sum.convos += r.convos; sum.pres += r.pres; } }
+  for (let d = d0; d <= t; d = addDays(d, 1)) { const r = (((S.daily || {})[d] || {}).p || {})[S.me]; if (r) { sum.calls += r.calls; sum.convos += r.convos; sum.pres += r.pres; } }
   return sum;
 }
 function meuDiaHTML() {
@@ -195,10 +197,10 @@ function meuDiaHTML() {
       <div class="chips">${ops.map((c) => `<button class="chip ${rec[dc.k][c.id] ? 'on' : ''}" data-act="dailyChk" data-k="${dc.k}" data-c="${c.id}" aria-pressed="${!!rec[dc.k][c.id]}">${rec[dc.k][c.id] ? '✓ ' : ''}${esc(c.name)}</button>`).join('') || '<small class="muted">Nenhuma clínica ativa.</small>'}</div></div>`;
   }).join('');
   const open = S.tasks.filter((t) => t.status !== 'concluido' && t.due <= today && clinicById(t.clinicId)).length;
-  const backs = leadClinics().filter((c) => c.nextDate && c.nextDate <= today).sort((a, b) => a.nextDate.localeCompare(b.nextDate));
+  const pr = prospRec(today); const backs = leadClinics().filter((c) => mine(c) && c.nextDate && c.nextDate <= today).sort((a, b) => a.nextDate.localeCompare(b.nextDate));
   const wk = weekTotals();
-  const counter = (k, label, goal) => `<div class="cnt ${rec[k] >= goal ? 'hit' : ''}"><span>${label}</span><b>${rec[k]}<small>/${goal}</small></b>
-    <div class="bar"><i style="width:${Math.min(100, (rec[k] / Math.max(1, goal)) * 100)}%"></i></div>
+  const counter = (k, label, goal) => `<div class="cnt ${pr[k] >= goal ? 'hit' : ''}"><span>${label}</span><b>${pr[k]}<small>/${goal}</small></b>
+    <div class="bar"><i style="width:${Math.min(100, (pr[k] / Math.max(1, goal)) * 100)}%"></i></div>
     <div class="cnt-b"><button class="btn sm" data-act="cnt" data-k="${k}" data-d="-1" aria-label="Menos uma">−</button><button class="btn sm primary" data-act="cnt" data-k="${k}" data-d="1">+1</button></div></div>`;
   const blockHTML = (b) => {
     const live = cur && cur.k === b.k ? ' live' : '';
@@ -207,7 +209,7 @@ function meuDiaHTML() {
       ${chk}
       <a class="md-link" href="#/tarefas" data-act="tf" data-f="hoje">${open ? `${pl(open, 'tarefa das clínicas para hoje', 'tarefas das clínicas para hoje')} →` : 'Tarefas das clínicas: tudo em dia ✓'}</a></div>`;
     return `<div class="md-b${live}"><header><span class="md-time">${b.range[0]}–${b.range[1]}</span><h4>Prospecção ativa</h4>
-        <button class="md-done ${rec.prospDone ? 'on' : ''}" data-act="prospDone" aria-pressed="${rec.prospDone}">${rec.prospDone ? '✓ Feita' : 'Marcar 2h feitas'}</button></header>
+        <button class="md-done ${pr.prospDone ? 'on' : ''}" data-act="prospDone" aria-pressed="${pr.prospDone}">${pr.prospDone ? '✓ Feita' : 'Marcar 2h feitas'}</button></header>
       <div class="cnts">${counter('calls', 'Ligações', g.calls)}${counter('convos', 'Conversas', g.convos)}${counter('pres', 'Apresentações', g.pres)}</div>
       <div class="md-sub"><b>Fila de hoje: ${backs.length}</b><span class="btns" style="margin:0"><button class="btn sm" data-act="impOpen">Importar</button><button class="btn sm" data-act="leadNew">+ Lead</button></span></div>
       ${backs.length ? `<button class="btn primary block-call" data-act="callStart">▶ Começar Modo ligação</button>
@@ -1197,6 +1199,11 @@ document.addEventListener('click', (e) => {
       ui.clinicTab = 'hoje'; ui.lastClinic = c.id; go('#/clinica/' + c.id);
     },
     impOpen: () => importForm(),
+    queueOpen: () => queueForm(d.uf),
+    qGo: () => qGo(),
+    qClear: () => { ui.q.f.sel = []; qRender(); },
+    lw: () => { ui.lw = d.w; render(); },
+    impBase: () => impBase(),
     scriptReset: () => { if (confirm('Voltar ao roteiro padrão?')) { S.settings.script = ''; save(); render(); } },
     impPaste: () => { const t = $('#impPaste').value; if (!t.trim()) return toast('Cole as linhas primeiro'); impLoad(parseDelimited(t)); },
     impGo: () => impGo(),
@@ -1209,8 +1216,8 @@ document.addEventListener('click', (e) => {
     lf: () => { ui.lf = d.f; render(); },
     leadsToday: () => { const t = todayStr(); let n = 0; leadClinics().forEach((c) => { if (c.nextDate && c.nextDate < t) { c.nextDate = t; n++; } }); saveNow(); render(); toast(`${n} leads trazidos para hoje`); },
     dailyChk: () => { const r = dayRec(); r[d.k][d.c] = !r[d.k][d.c]; if (r[d.k][d.c]) log(`${DAILY_CHECKS.find((x) => x.k === d.k).t}: ${clinicById(d.c).name}`, d.c); rerender(); },
-    cnt: () => { const r = dayRec(); r[d.k] = Math.max(0, (r[d.k] || 0) + +d.d); rerender(); },
-    prospDone: () => { const r = dayRec(); r.prospDone = !r.prospDone; if (r.prospDone) { log('Prospecção do dia concluída (2h)'); toast('Prospecção de hoje feita ✓'); } rerender(); },
+    cnt: () => { const r = prospRec(); r[d.k] = Math.max(0, (r[d.k] || 0) + +d.d); rerender(); },
+    prospDone: () => { const r = prospRec(); r.prospDone = !r.prospDone; if (r.prospDone) { log('Prospecção do dia concluída (2h)'); toast('Prospecção de hoje feita ✓'); } rerender(); },
     swapBlocks: () => { const r = dayRec(); r.swap = !r.swap; rerender(); toast(r.swap ? 'Blocos trocados só por hoje' : 'Ordem normal'); },
     leadNew: () => leadForm(),
     leadContact: () => leadContactForm(clinicById(d.id)),
@@ -1223,7 +1230,7 @@ document.addEventListener('click', (e) => {
     goCr: () => { ui.crClinic = d.c; ui.crMonth = d.n; closePanel(); go('#/criativos'); },
     newCamp: () => campForm(d.c),
     res: () => { ui.resClinic = d.c; if (d.m) ui.resMonth = +d.m; },
-    me: () => { S.me = d.p; save(); render(); toast(`Usando como ${d.p}`); },
+    me: () => { S.me = d.p; try { localStorage.setItem('roity-me', d.p); } catch (e) {} save(); render(); toast(`Usando como ${d.p}`); },
     theme: () => { S.settings.theme = d.t; applyTheme(); save(); render(); },
     exportJSON: () => { S.settings.lastBackup = todayStr(); saveNow(); download(`roity-mbcr-backup-${todayStr()}.json`, JSON.stringify(S, null, 1), 'application/json'); toast('Backup baixado. Guarde no iCloud ou Drive.'); if (route.name === 'visao' || route.name === 'config') setTimeout(render, 300); },
     csv: () => {
@@ -1285,6 +1292,15 @@ document.addEventListener('click', (e) => {
 });
 let tqTimer;
 document.addEventListener('input', (e) => {
+  const dq = e.target.dataset && e.target.dataset.q;
+  if (dq && ui.q) { const el = e.target; const f = ui.q.f;
+    if (dq === 'city') { const v = el.value; f.sel = el.checked ? [...new Set([...f.sel, v])] : f.sel.filter((x) => x !== v); qRender(); return; }
+    if (dq === 'noIndiv') f.noIndiv = el.checked; else if (dq === 'minAge') f.minAge = +el.value; else if (dq === 'cnae') f.cnae = el.value; else if (dq === 'who') f.who = el.value;
+    else if (dq === 'cs') { f.cs = el.value; clearTimeout(ui.qT); ui.qT = setTimeout(() => { qRender(); const i = $('[data-q="cs"]'); if (i) { i.focus(); i.setSelectionRange(f.cs.length, f.cs.length); } }, 200); return; }
+    else if (dq === 'qty') { ui.q.qty = Math.max(1, +el.value || 1); clearTimeout(ui.qT); ui.qT = setTimeout(() => { qRender(); const i = $('[data-q="qty"]'); if (i) i.focus(); }, 450); return; }
+    else if (dq === 'perDay') { ui.q.perDay = Math.max(1, +el.value || 1); clearTimeout(ui.qT); ui.qT = setTimeout(() => { qRender(); const i = $('[data-q="perDay"]'); if (i) i.focus(); }, 450); return; }
+    else if (dq === 'start') ui.q.start = el.value || todayStr();
+    qRender(); return; }
   const di = e.target.dataset && e.target.dataset.imp;
   if (di && ui.imp) { const v = e.target.type === 'checkbox' ? e.target.checked : e.target.value;
     if (['noIndiv', 'minAge', 'minCap', 'city', 'cnae'].includes(di)) ui.imp.f[di] = ['minAge', 'minCap'].includes(di) ? +v : v;

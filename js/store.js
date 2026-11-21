@@ -77,6 +77,7 @@ function saveNow() { touch(); clearTimeout(saveTimer); localStorage.setItem(STOR
 function applyRemote(data) {
   clearTimeout(saveTimer);
   S = Object.assign(defaultState(), data, { settings: Object.assign(defaultState().settings, data.settings) });
+  try { const me = localStorage.getItem('roity-me'); if (me) S.me = me; } catch (e) {}
   try { localStorage.setItem(STORE_KEY, JSON.stringify(S)); } catch (e) {}
   if (typeof onRemoteApplied === 'function') onRemoteApplied();
 }
@@ -250,6 +251,7 @@ function seedDemo() {
 function initStore() {
   S = load();
   if (!S) { S = defaultState(); seedDemo(); saveNow(); }
+  try { const me = localStorage.getItem('roity-me'); if (me) S.me = me; } catch (e) {}
   if (!S.settings.v2) { S.settings.v2 = true; if (S.settings.capacity.Tiago === 4) S.settings.capacity.Tiago = 2; }
   if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
 }
