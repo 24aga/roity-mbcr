@@ -619,6 +619,19 @@ function renderPresMonth() {
 
 // ---------- Proposta comercial Roity + 24AGÁ ----------
 // Não mostra o ciclo de 12 meses em detalhe (o método fica protegido).
+const SCOPE = [
+  ['Planejamento estratégico e gestão de marketing', ['Diagnóstico inicial da clínica, posicionamento e ofertas', 'Plano de ação mensal com metas definidas junto com você', 'Coordenação de todas as frentes em um só lugar']],
+  ['Gestão de tráfego pago (Meta Ads)', ['Criação, configuração e gestão das campanhas no Instagram e Facebook', 'Otimização contínua de público, criativos, oferta e orçamento', 'Acompanhamento do custo por contato e por paciente']],
+  ['Até 6 criativos por mês', ['Vídeos curtos e imagens para anúncios e perfil', 'Roteiros por procedimento e orientação de gravação', 'Edição dos vídeos e artes com a identidade da clínica (a clínica grava, a Roity roteiriza e edita)']],
+  ['Calendário editorial', ['Temas e datas de conteúdo do mês', 'Direcionamento do que postar e quando']],
+  ['Atendimento 24 horas com a 24AGÁ', ['Implantação e operação dos fluxos de atendimento', 'Pré-atendimento, qualificação, follow-up, reativação e pós-atendimento', 'Encaminhamento para a sua equipe confirmar e fechar']],
+  ['Treinamento comercial', ['Treinamento da recepção e da equipe: abordagem, objeções e fechamento', 'Roteiros de conversa, mensagens prontas, materiais e modelos de proposta']],
+  ['Follow-up, reativação e retenção', ['Campanhas para recuperar quem não fechou', 'Reativação de pacientes antigos e lembretes de retorno', 'Sempre com consentimento e opção de sair']],
+  ['Duas reuniões por mês', ['1 hora cada, quinzenais, com pauta e ata', 'Estratégia e resultados + treinamento e conversão']],
+  ['Relatório mensal', ['Ações realizadas, investimento, contatos, agendamentos e pacientes', 'Comparação com o mês anterior e próximos passos']],
+  ['Suporte', ['Orientação e suporte em horário comercial, pelo canal combinado']],
+];
+const NOT_INCLUDED = ['Verba de anúncios (paga direto à plataforma)', 'Google Ads (disponível como plano adicional)', 'Filmagem presencial', 'Gestão ilimitada de postagens'];
 const REF_VALUES = [
   ['Estratégia e posicionamento', 750], ['Campanhas Meta', 1200], ['Criativos e roteiros', 900],
   ['24AGÁ (atendimento 24 horas)', 450], ['Treinamento e retenção', 650], ['Duas reuniões e relatório', 550],
@@ -655,7 +668,10 @@ function proposalDoc(c, p) {
 
         <h2><span class="r-badge">02</span>O que está incluído</h2>
         <p>A mensalidade reúne <b>estratégia, execução e tecnologia</b> em um só lugar. O método MBCR (Marketing, Branding, Conversão e Retenção) já está pronto e é aplicado mês a mês pela Roity na sua clínica.</p>
-        <ul class="p-list">${MONTHLY.map(([a, d]) => `<li><b>${a}</b> — ${d}</li>`).join('')}</ul>
+        <div class="p-high"><div><b>6</b><span>criativos por mês</span></div><div><b>2</b><span>reuniões por mês</span></div><div><b>24h</b><span>atendimento com a 24AGÁ</span></div><div><b>1</b><span>relatório por mês</span></div></div>
+        <h3 class="p-sub">Escopo completo — todo mês</h3>
+        <div class="p-scope">${SCOPE.map(([t, items], i) => `<div><small>${String(i + 1).padStart(2, '0')}</small><b>${t}</b><ul>${items.map((x) => `<li>${x}</li>`).join('')}</ul></div>`).join('')}</div>
+        <p class="p-notinc"><b>Não incluso:</b> ${NOT_INCLUDED.join(' · ')}.</p>
         ${p.showRef ? `<table class="tbl p-inv p-ref"><thead><tr><th>Valores de referência das entregas</th><th>R$/mês</th></tr></thead><tbody>
           ${REF_VALUES.map(([a, v]) => `<tr><td>${a}</td><td>${money(v)}</td></tr>`).join('')}
           <tr class="sub"><td>Referência das entregas</td><td><s>${money(refSum)}</s></td></tr>
