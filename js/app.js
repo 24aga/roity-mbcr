@@ -33,6 +33,7 @@ const ICONS = {
   config: '<path d="M4 6.5h9M17 6.5h3M4 12h3M11 12h9M4 17.5h11M19 17.5h1"/><circle cx="15" cy="6.5" r="2"/><circle cx="9" cy="12" r="2"/><circle cx="17" cy="17.5" r="2"/>',
   mais: '<circle cx="5" cy="12" r="1.3"/><circle cx="12" cy="12" r="1.3"/><circle cx="19" cy="12" r="1.3"/>',
   leads: '<path d="M5 4h3.5l1.8 4.4-2.3 1.4a11 11 0 0 0 5.2 5.2l1.4-2.3L19 14.5V18a2 2 0 0 1-2 2A15 15 0 0 1 3 6a2 2 0 0 1 2-2z"/>',
+  chev: '<path d="M9 6l6 6-6 6"/>',
   plus: '<path d="M12 5v14M5 12h14"/>',
   search: '<circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/>',
   sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.3 5.3l1.4 1.4M17.3 17.3l1.4 1.4M5.3 18.7l1.4-1.4M17.3 6.7l1.4-1.4"/>',
@@ -54,6 +55,7 @@ function parseRoute() {
   const h = location.hash.replace(/^#\/?/, '') || 'visao';
   const [name, ...params] = h.split('/');
   route = { name, params };
+  if (name === 'leads' && params[1] !== ui.lastCity) { ui.cityShow = 30; ui.lastCity = params[1]; }
   if (name === 'clinica' && params[0] !== ui.lastClinic) { ui.clinicTab = 'hoje'; ui.lastClinic = params[0]; }
 }
 function go(h) { location.hash = h; }
@@ -211,11 +213,12 @@ function meuDiaHTML() {
     return `<div class="md-b${live}"><header><span class="md-time">${b.range[0]}–${b.range[1]}</span><h4>Prospecção ativa</h4>
         <button class="md-done ${pr.prospDone ? 'on' : ''}" data-act="prospDone" aria-pressed="${pr.prospDone}">${pr.prospDone ? '✓ Feita' : 'Marcar 2h feitas'}</button></header>
       <div class="cnts">${counter('calls', 'Ligações', g.calls)}${counter('convos', 'Conversas', g.convos)}${counter('pres', 'Apresentações', g.pres)}</div>
-      <div class="md-sub"><b>Fila de hoje: ${backs.length}</b><span class="btns" style="margin:0"><button class="btn sm" data-act="impOpen">Importar</button><button class="btn sm" data-act="leadNew">+ Lead</button></span></div>
-      ${backs.length ? `<button class="btn primary block-call" data-act="callStart">▶ Começar Modo ligação</button>
+      <div class="md-sub"><b>Retornos de hoje: ${backs.length}</b><span class="btns" style="margin:0"><button class="btn sm" data-act="leadNew">+ Lead</button></span></div>
+      ${backs.length ? `<button class="btn primary block-call" data-act="callStart">▶ Ligar retornos</button>
       <ul class="backs">${backs.slice(0, 4).map((c) => `<li><span><b>${esc(c.name)}</b><small>${esc([c.city, c.nextAction || 'Retornar contato'].filter(Boolean).join(' · '))}${c.nextDate < today ? ` · <em>desde ${fmtShort(c.nextDate)}</em>` : ''}</small></span>
         <span class="btns" style="margin:0"><button class="btn sm" data-act="leadContact" data-id="${c.id}">Registrar</button></span></li>`).join('')}</ul>${backs.length > 4 ? `<a class="md-link" href="#/leads">Ver a fila inteira (${backs.length}) →</a>` : ''}`
-      : `<p class="muted md-empty">Fila vazia. Importe uma lista (Kenai, Excel) ou cadastre um lead.</p>`}
+      : `<p class="muted md-empty">Nenhum retorno para hoje.</p>`}
+      <a class="btn block-call" href="#/leads">📍 Escolher cidade e ligar</a>
       <small class="muted">Semana: ${pl(wk.calls, 'ligação', 'ligações')} · ${pl(wk.convos, 'conversa', 'conversas')} · ${pl(wk.pres, 'apresentação', 'apresentações')}</small></div>`;
   };
   return `<section class="md">
@@ -1208,9 +1211,17 @@ document.addEventListener('click', (e) => {
     impPaste: () => { const t = $('#impPaste').value; if (!t.trim()) return toast('Cole as linhas primeiro'); impLoad(parseDelimited(t)); },
     impGo: () => impGo(),
     callStart: () => openCallMode(),
+    cityCall: () => openCallMode(d.uf, d.c),
+    pufSel: () => { ui.puf = d.uf; try { localStorage.setItem('roity-uf', d.uf); } catch (e) {} ui.cq = ''; render(); },
+    pfOpen: () => pfForm(),
+    pfReset: () => { pfSet({}); closeModal(); render(); toast('Filtros no padrão'); },
+    poolRes: () => poolResultForm(d.uf, d.k),
+    cityTake: () => { setCityOwner(d.uf, d.c, S.me); save(); render(); toast('Cidade marcada para você'); },
+    cityFree: () => { setCityOwner(d.uf, d.c, ''); save(); render(); },
+    cityMore: () => { ui.cityShow = (ui.cityShow || 30) + 50; render(); },
     callClose: () => closeCallMode(),
     callRes: () => callResult(d.r),
-    callSkip: () => { const c = leadQueue().filter((x) => !ui.callSkip.has(x.id))[0]; if (c) ui.callSkip.add(c.id); callRender(); },
+    callSkip: () => { const it = callItems()[0]; if (it) ui.callSkip.add(it.key); callRender(); },
     callUnskip: () => { ui.callSkip = new Set(); callRender(); },
     callOpen: () => { closeCallMode(); go('#/clinica/' + d.id); },
     lf: () => { ui.lf = d.f; render(); },
@@ -1307,6 +1318,7 @@ document.addEventListener('input', (e) => {
     else if (di === 'qty') ui.imp.qty = Math.max(1, +v || 1); else if (di === 'perDay') ui.imp.perDay = Math.max(1, +v || 1); else if (di === 'start') ui.imp.start = v || todayStr();
     if (e.target.type !== 'number' && e.target.type !== 'date') impRender(); else { clearTimeout(ui.impT); ui.impT = setTimeout(() => { const a = document.activeElement; const k = a && a.dataset.imp; impRender(); if (k) { const n = document.querySelector(`[data-imp="${k}"]`); if (n) { n.focus(); } } }, 450); }
     return; }
+  if (e.target.dataset && e.target.dataset.act === 'cq') { ui.cq = e.target.value; const st = Pool.data[ui.puf]; if (st) renderCities(ui.puf, st); return; }
   if (e.target.dataset && e.target.dataset.act === 'lq') { clearTimeout(ui.lqT); const v = e.target.value; ui.lqT = setTimeout(() => { ui.lq = v; render(); const i = $('[data-act="lq"]'); if (i) { i.focus(); i.setSelectionRange(v.length, v.length); } }, 250); return; }
   if (e.target.dataset && e.target.dataset.pf) { propUpdate(e.target); return; }
   if (e.target.dataset.act === 'tq') { clearTimeout(tqTimer); const v = e.target.value; tqTimer = setTimeout(() => { ui.taskQuery = v; render(); const i = $('[data-act="tq"]'); i.focus(); i.setSelectionRange(v.length, v.length); }, 250); }
@@ -1335,6 +1347,8 @@ document.addEventListener('submit', (e) => {
     S.tasks.push(t); log(`Criou tarefa “${t.title}”`, t.clinicId); closeModal(); rerender(); openPanel({ type: 'task', id: t.id });
   } else if (kind === 'chkAdd') {
     const t = taskById(ui.panel.id); if (!g('t')) return; t.checklist.push({ t: g('t'), done: false }); rerender(); setTimeout(() => $('#panel [name="t"]')?.focus(), 30);
+  } else if (kind === 'pf') {
+    pfSet({ cnae: g('cnae'), noIndiv: fd.get('noIndiv') === 'on', minAge: +g('minAge') }); closeModal(); render(); toast('Filtros aplicados');
   } else if (kind === 'script') {
     S.settings.script = g('script'); save(); toast('Roteiro salvo');
   } else if (kind === 'leadNew') {
@@ -1342,7 +1356,7 @@ document.addEventListener('submit', (e) => {
       price: 2500, setupFee: 1500, setupWaived: false, mediaBudget: null, startDate: todayStr(), payment: 'na', exclusivity: 'nao_solicitada', guarantee: 'em_definicao', nextAction: g('nextAction'), nextDate: g('nextDate') || todayStr(), leadLog: [] };
     S.clinics.push(c); log(`Novo lead: ${c.name}`, c.id); closeModal(); saveNow(); rerender(); toast('Lead salvo');
   } else if (kind === 'leadContact') {
-    const c = clinicById(f.dataset.id); let d = g('nextDate'); if (d && [0, 6].includes(parseD(d).getDay())) d = nextWeekday(d);
+    const c = f.dataset.pool ? ensureLead(f.dataset.uf, f.dataset.pool) : clinicById(f.dataset.id); if (!c) return; let d = g('nextDate'); if (d && [0, 6].includes(parseD(d).getDay())) d = nextWeekday(d);
     applyLeadResult(c, g('result'), d, g('nextAction'), g('note')); closeModal(); saveNow(); rerender(); toast('Contato registrado');
   } else if (kind === 'syncConnect') {
     const tok = g('token'); if (!tok) return;

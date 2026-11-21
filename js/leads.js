@@ -415,3 +415,168 @@ function qGo() {
   log(`Fila de ${who}: ${qty} clínicas de ${q.uf}${q.f.sel.length ? ' (' + q.f.sel.join(', ') + ')' : ''}, ${q.perDay} por dia`); closeModal(); saveNow(); ui.q = null;
   toast(`Fila criada: ${qty} clínicas para ${who}`); if (route.name === 'leads') render(); else go('#/leads');
 }
+
+// =====================================================================
+// PROSPECÇÃO POR CIDADE (estado → cidade → ligar). Substitui "montar fila".
+// =====================================================================
+const PF_KEY = 'roity-pf';
+function pf() { try { return Object.assign({ cnae: '9602502', noIndiv: true, minAge: 2 }, JSON.parse(localStorage.getItem(PF_KEY) || '{}')); } catch (e) { return { cnae: '9602502', noIndiv: true, minAge: 2 }; } }
+function pfSet(v) { try { localStorage.setItem(PF_KEY, JSON.stringify(v)); } catch (e) {} }
+const inProfile = (r, f) => { const y = new Date().getFullYear(); return (!f.noIndiv || !r[9]) && (!f.minAge || (r[8] && y - r[8] >= f.minAge)) && (!f.cnae || r[10] === f.cnae); };
+const cityKey = (uf, city) => uf + '|' + city;
+function cityOwner(uf, city) { return (S.cityOwner || {})[cityKey(uf, city)] || ''; }
+function setCityOwner(uf, city, who) { S.cityOwner = S.cityOwner || {}; if (who) S.cityOwner[cityKey(uf, city)] = who; else delete S.cityOwner[cityKey(uf, city)]; }
+function workedMap() { const m = new Map(); S.clinics.forEach((c) => { if (c.poolKey) m.set(c.poolKey, c); }); return m; }
+const touched = (c) => c && ((c.leadLog || []).length || c.stage !== 'lead');
+function leadFromRow(uf, r) {
+  return { id: uid(), createdAt: new Date().toISOString(), poolKey: r[0], name: r[1], phone: fmtPhone(r[2]), phone2: r[3] ? fmtPhone(r[3]) : '', email: r[4], city: r[5], bairro: r[6], uf,
+    cnpj: /^p/.test(r[0]) ? '' : r[0], capital: r[7] || null, openedYear: r[8] || null, indiv: !!r[9], cnae: r[10], segment: r[10] === '8630504' ? 'odontologia' : 'estetica', stage: 'lead', owner: S.me,
+    price: 2500, setupFee: 1500, setupWaived: false, mediaBudget: null, startDate: todayStr(), payment: 'na', exclusivity: 'nao_solicitada', guarantee: 'em_definicao', nextAction: 'Primeira ligação', nextDate: todayStr(), leadLog: [], source: 'Base ' + uf };
+}
+function ensureLead(uf, key) {
+  const ex = S.clinics.find((c) => c.poolKey === key); if (ex) return ex;
+  const st = Pool.data[uf]; const r = st && st.obj.rows.find((x) => x[0] === key); if (!r) return null;
+  const c = leadFromRow(uf, r); S.clinics.push(c); if (!cityOwner(uf, c.city)) setCityOwner(uf, c.city, S.me); return c;
+}
+
+// ---------- página Prospecção ----------
+VIEWS.leads = () => {
+  const [uf0, cityEnc] = route.params; const city = cityEnc ? decodeURIComponent(cityEnc) : '';
+  if (city) return cityView(uf0, city);
+  const t = todayStr(); const backs = leadQueue();
+  view().innerHTML = `
+    ${!Sync.enabled() ? `<div class="notice">A base de leads fica no seu repositório privado. Conecte a sincronização em <a href="#/config">Configurações</a> para ver estados e cidades.</div>` : ''}
+    ${backs.length ? `<section class="card ret"><header><h3>Retornos de hoje <small class="muted">${backs.length}</small></h3><button class="btn primary" data-act="callStart">▶ Ligar retornos</button></header>
+      <ul class="backs">${backs.slice(0, 3).map((c) => `<li><span><b>${esc(c.name)}</b><small>📍 ${esc(c.city || '')} · ${esc(c.nextAction || 'Retornar')}${c.nextDate < t ? ` · <em>desde ${fmtShort(c.nextDate)}</em>` : ''}</small></span><span class="btns" style="margin:0"><button class="btn sm" data-act="leadContact" data-id="${c.id}">Resultado</button></span></li>`).join('')}</ul>
+      ${backs.length > 3 ? `<p class="hint">+ ${backs.length - 3} no Modo ligação</p>` : ''}</section>` : ''}
+    <div class="pr-head"><div class="ufs" id="ufChips"><span class="hint">Carregando estados…</span></div>
+      <span class="btns" style="margin:0"><button class="btn sm" data-act="pfOpen">Filtros</button><button class="btn sm ghost" data-act="impOpen">Importar</button></span></div>
+    <input type="search" class="city-search" placeholder="Buscar cidade" value="${esc(ui.cq || '')}" data-act="cq" aria-label="Buscar cidade">
+    <section class="card cities" id="cityList"><p class="hint">Carregando cidades…</p></section>`;
+  if (Sync.enabled()) setTimeout(loadCities, 0); else { $('#ufChips').innerHTML = ''; $('#cityList').innerHTML = empty('Conecte a sincronização para ver as cidades.', 'leads'); }
+};
+async function loadCities() {
+  try {
+    const idx = await Pool.index(); const ufs = Object.keys(idx.states || {}).sort((a, b) => idx.states[b].count - idx.states[a].count);
+    if (!ufs.length) { $('#ufChips').innerHTML = ''; $('#cityList').innerHTML = empty('A base está vazia. Toque em Importar para adicionar uma lista.', 'leads'); return; }
+    let uf = ui.puf; if (!uf) { try { uf = localStorage.getItem('roity-uf'); } catch (e) {} } if (!ufs.includes(uf)) uf = ufs[0]; ui.puf = uf;
+    $('#ufChips').innerHTML = ufs.map((u) => `<button class="ufc ${u === uf ? 'on' : ''}" data-act="pufSel" data-uf="${u}">${u}</button>`).join('');
+    const box = $('#cityList'); if (!Pool.data[uf]) box.innerHTML = `<p class="hint">Carregando ${uf}…</p>`;
+    const st = await Pool.state(uf); renderCities(uf, st);
+  } catch (e) { $('#cityList').innerHTML = `<div class="notice warn">Não consegui carregar a base: ${esc(e.message)}</div>`; }
+}
+function cityStats(uf, st) {
+  const f = pf(); const wm = workedMap(); const cs = {};
+  st.obj.rows.forEach((r) => { if (!inProfile(r, f)) return; const o = (cs[r[5]] = cs[r[5]] || { city: r[5], prof: 0, done: 0 }); o.prof++; if (touched(wm.get(r[0]))) o.done++; });
+  return Object.values(cs).sort((a, b) => b.prof - a.prof);
+}
+function renderCities(uf, st) {
+  const box = $('#cityList'); if (!box || route.name !== 'leads' || route.params[1]) return;
+  const q = noAcc(ui.cq || ''); const all = cityStats(uf, st); const list = all.filter((c) => !q || noAcc(c.city).includes(q));
+  const tot = all.reduce((a, c) => a + c.prof, 0), done = all.reduce((a, c) => a + c.done, 0);
+  box.innerHTML = `<header><h3>${uf} <small class="muted">${tot.toLocaleString('pt-BR')} no perfil · ${done.toLocaleString('pt-BR')} ligadas · ${all.length} cidades</small></h3></header>
+    ${list.length ? `<ul class="clist">${list.slice(0, 120).map((c) => { const ow = cityOwner(uf, c.city); const left = c.prof - c.done;
+      return `<li><a href="#/leads/${uf}/${encodeURIComponent(c.city)}" class="crow">
+        <span class="cname"><b>${esc(c.city)}</b><small>${left.toLocaleString('pt-BR')} a ligar${c.done ? ` · ${c.done} ligadas` : ''}</small></span>
+        ${ow ? `<span class="owner ${ow === S.me ? 'me' : ''}">${esc(ow)}</span>` : '<span class="owner free">livre</span>'}
+        <span class="cbar"><i style="width:${c.prof ? Math.max(2, (c.done / c.prof) * 100) : 0}%"></i></span>${icon('chev', 'chev')}</a></li>`; }).join('')}</ul>${list.length > 120 ? `<p class="hint">Mostrando 120 de ${list.length}. Use a busca.</p>` : ''}`
+      : empty(q ? 'Nenhuma cidade com esse nome no perfil.' : 'Nenhuma clínica no perfil. Ajuste os filtros.', 'search')}`;
+}
+
+// ---------- tela da cidade ----------
+async function cityView(uf, city) {
+  view().innerHTML = `<a class="back" href="#/leads">← Cidades de ${uf}</a><div id="cityBody"><p class="hint">Carregando ${esc(city)}…</p></div>`;
+  if (!Sync.enabled()) { $('#cityBody').innerHTML = empty('Conecte a sincronização para ver a base.', 'leads'); return; }
+  try { const st = await Pool.state(uf); renderCity(uf, city, st); } catch (e) { $('#cityBody').innerHTML = `<div class="notice warn">${esc(e.message)}</div>`; }
+}
+function renderCity(uf, city, st) {
+  const box = $('#cityBody'); if (!box) return;
+  const f = pf(); const wm = workedMap(); const t = todayStr();
+  const rows = st.obj.rows.filter((r) => r[5] === city && inProfile(r, f)).sort((a, b) => rowScore(b) - rowScore(a));
+  const todo = rows.filter((r) => !touched(wm.get(r[0])));
+  const done = rows.filter((r) => touched(wm.get(r[0]))).map((r) => wm.get(r[0]));
+  const logs = done.flatMap((c) => c.leadLog || []);
+  const conv = done.filter((c) => (c.leadLog || []).some((l) => l.result !== 'sem_resposta')).length;
+  const pres = done.filter((c) => (c.leadLog || []).some((l) => l.result === 'apresentacao' || l.result === 'proposta')).length;
+  const ow = cityOwner(uf, city); const show = ui.cityShow || 30;
+  const rowHTML = (r) => { const c = wm.get(r[0]); const p = fmtPhone(r[2]);
+    return `<li class="lead"><div class="ld"><b>${esc(r[1])}</b><small>${esc([r[6], r[8] ? 'desde ' + r[8] : '', r[7] ? 'capital ' + money(r[7]) : ''].filter(Boolean).join(' · '))}</small>
+      ${c && c.nextDate ? `<small class="ld-next">Retorno ${fmtShort(c.nextDate)}${c.nextAction ? ' · ' + esc(c.nextAction) : ''}</small>` : ''}</div>
+      <div class="ld-b">${p ? `<a class="btn sm primary" href="tel:+55${digits(r[2])}" data-act="dialed" data-uf="${uf}" data-k="${esc(r[0])}">${icon('leads')}<span>Ligar</span></a>` : ''}
+        ${isMobile(r[2]) ? `<a class="btn sm" href="${waLink(r[2])}" target="_blank" rel="noopener">WhatsApp</a>` : ''}
+        <button class="btn sm" data-act="poolRes" data-uf="${uf}" data-k="${esc(r[0])}">Resultado</button></div></li>`; };
+  box.innerHTML = `
+    <div class="city-h"><div><h2>📍 ${esc(city)}<span class="muted">/${uf}</span></h2>
+      <span class="owner ${ow === S.me ? 'me' : ow ? '' : 'free'}">${ow ? (ow === S.me ? 'Você está trabalhando aqui' : esc(ow) + ' está trabalhando aqui') : 'Cidade livre'}</span>
+      ${ow === S.me ? `<button class="lnk" data-act="cityFree" data-uf="${uf}" data-c="${esc(city)}">liberar</button>` : `<button class="lnk" data-act="cityTake" data-uf="${uf}" data-c="${esc(city)}">assumir</button>`}</div></div>
+    <div class="cm3"><div class="kpi"><span>A ligar</span><b>${todo.length.toLocaleString('pt-BR')}</b></div><div class="kpi"><span>Ligadas</span><b>${done.length}</b></div><div class="kpi"><span>Conversas</span><b>${conv}</b></div><div class="kpi"><span>Apresentações</span><b>${pres}</b></div></div>
+    <button class="btn primary block-call" data-act="cityCall" data-uf="${uf}" data-c="${esc(city)}" ${todo.length || done.some((c) => c.nextDate && c.nextDate <= t) ? '' : 'disabled'}>▶ Ligar em sequência</button>
+    <section class="card"><header><h3>A ligar <small class="muted">mais estruturadas primeiro</small></h3></header>
+      ${todo.length ? `<ul class="leads-l">${todo.slice(0, show).map(rowHTML).join('')}</ul>${todo.length > show ? `<button class="btn block" data-act="cityMore">Mostrar mais (${todo.length - show})</button>` : ''}` : empty('Todas as clínicas do perfil nesta cidade já foram ligadas ✓', 'tarefas')}</section>
+    ${done.length ? `<details class="card"><summary><b>Já ligadas (${done.length})</b></summary><ul class="leads-l">${done.map((c) => { const l = (c.leadLog || [])[0];
+      return `<li class="lead"><div class="ld"><b>${esc(c.name)}</b><small>${l ? esc(RESULTS.find((x) => x[0] === l.result)?.[1] || '') + ' · ' + fmtShort(l.at.slice(0, 10)) : stageLabel(c.stage)}${c.nextDate ? ' · retorno ' + fmtShort(c.nextDate) : ''}</small></div>
+        <div class="ld-b">${c.phone ? `<a class="btn sm" href="tel:+55${digits(c.phone)}">Ligar</a>` : ''}<button class="btn sm" data-act="leadContact" data-id="${c.id}">Resultado</button></div></li>`; }).join('')}</ul></details>` : ''}`;
+}
+function poolResultForm(uf, key) {
+  const st = Pool.data[uf]; const r = st && st.obj.rows.find((x) => x[0] === key); if (!r) return;
+  const ex = S.clinics.find((c) => c.poolKey === key);
+  leadContactForm(ex || { id: '', name: r[1], phone: fmtPhone(r[2]), leadLog: [] });
+  const fm = $('[data-form="leadContact"]'); if (fm && !ex) { fm.dataset.pool = key; fm.dataset.uf = uf; }
+}
+function pfForm() {
+  const f = pf(); const st = Pool.data[ui.puf]; const cn = {}; if (st) st.obj.rows.forEach((r) => (cn[r[10]] = (cn[r[10]] || 0) + 1));
+  const opts = Object.entries(cn).sort((a, b) => b[1] - a[1]).slice(0, 10);
+  modal(`<form data-form="pf" class="mform"><h2>Filtros do perfil</h2><p class="full muted">Valem para estados, cidades e o Modo ligação.</p>
+    <label class="full"><span>Atividade</span><select name="cnae"><option value="">Todas</option>${opts.map(([c, n]) => `<option value="${c}"${c === f.cnae ? ' selected' : ''}>${esc(cnaeLabel(c))} (${n})</option>`).join('')}</select></label>
+    <label class="chkl full"><input type="checkbox" name="noIndiv" ${f.noIndiv ? 'checked' : ''}> Tirar MEI / empresário individual</label>
+    <label class="full"><span>Aberta há pelo menos</span><select name="minAge">${opt([['0', 'qualquer tempo'], ['1', '1 ano'], ['2', '2 anos'], ['3', '3 anos'], ['5', '5 anos']], String(f.minAge))}</select></label>
+    <div class="btns end"><button type="button" class="btn ghost" data-act="pfReset">Padrão</button><button type="button" class="btn" data-act="closeModal">Cancelar</button><button class="btn primary">Aplicar</button></div></form>`);
+}
+
+// ---------- Modo ligação (retornos ou por cidade) ----------
+function callItems() {
+  const t = todayStr(); const skip = ui.callSkip || new Set();
+  const backs = leadQueue().filter((c) => !skip.has(c.id)).map((c) => ({ c, key: c.id }));
+  if (!ui.callCity) return backs;
+  const { uf, city } = ui.callCity; const st = Pool.data[uf]; if (!st) return backs;
+  const f = pf(); const wm = workedMap();
+  const cityBacks = backs.filter((x) => x.c.city === city && x.c.uf === uf);
+  const fresh = st.obj.rows.filter((r) => r[5] === city && inProfile(r, f) && !touched(wm.get(r[0])) && !skip.has(r[0])).sort((a, b) => rowScore(b) - rowScore(a)).map((r) => ({ r, uf, key: r[0] }));
+  return [...cityBacks, ...fresh];
+}
+function openCallMode(uf, city) { ui.callSkip = new Set(); ui.callDone = 0; ui.callCity = uf && city ? { uf, city } : null; if (ui.callCity && !cityOwner(uf, city)) { setCityOwner(uf, city, S.me); save(); } $('#callMode').hidden = false; document.body.classList.add('noscroll'); callRender(); }
+function callRender() {
+  const items = callItems(); const it = items[0]; const r = prospRec(); const g = S.settings.goals; const el = $('#callMode');
+  const where = ui.callCity ? `${esc(ui.callCity.city)}/${ui.callCity.uf}` : 'Retornos';
+  if (!it) {
+    el.innerHTML = `<div class="cm"><div class="cm-top"><b>Modo ligação · ${where}</b><button class="btn sm" data-act="callClose">Fechar</button></div>
+      <div class="cm-end"><div class="th-num">✓</div><h2>${ui.callCity ? 'Cidade concluída' : 'Retornos de hoje concluídos'}</h2><p>${pl(ui.callDone, 'contato registrado', 'contatos registrados')} agora · hoje: ${pl(r.calls, 'ligação', 'ligações')}, ${pl(r.convos, 'conversa', 'conversas')}, ${pl(r.pres, 'apresentação', 'apresentações')}.</p>
+      ${ui.callSkip.size ? `<button class="btn" data-act="callUnskip">Voltar aos ${ui.callSkip.size} pulados</button>` : ''}<button class="btn primary" data-act="callClose">Concluir</button></div></div>`;
+    return;
+  }
+  const c = it.c; const rw = it.r; const yNow = new Date().getFullYear();
+  const d = c ? { name: c.name, phone: c.phone, phone2: c.phone2, email: c.email, city: c.city, uf: c.uf, bairro: c.bairro, y: c.openedYear, cap: c.capital, next: c.nextAction, due: c.nextDate, log: (c.leadLog || [])[0] }
+    : { name: rw[1], phone: fmtPhone(rw[2]), phone2: rw[3] ? fmtPhone(rw[3]) : '', email: rw[4], city: rw[5], uf: it.uf, bairro: rw[6], y: rw[8], cap: rw[7], next: 'Primeira ligação', due: todayStr(), log: null };
+  const meta = [d.y && `desde ${d.y} (${yNow - d.y} anos)`, d.cap && `capital ${money(d.cap)}`].filter(Boolean);
+  el.innerHTML = `<div class="cm">
+    <div class="cm-top"><b>Modo ligação · ${where}</b><span class="cm-prog">${r.calls}/${g.calls} ligações hoje · faltam ${items.length}</span><button class="btn sm" data-act="callClose">Fechar</button></div>
+    <div class="cm-grid"><section class="cm-card">
+      <small class="cm-eyebrow">${c ? (d.due < todayStr() ? `RETORNO ATRASADO DESDE ${fmtShort(d.due)}` : 'RETORNO DE HOJE') : 'NOVA'} · ${esc(d.next || '')}</small>
+      <h2>${esc(d.name)}</h2>
+      ${d.city ? `<p class="cm-city">📍 <b>${esc(d.city)}${d.uf ? '/' + esc(d.uf) : ''}</b>${d.bairro ? ' · ' + esc(d.bairro) : ''}</p>` : ''}
+      ${meta.length ? `<p class="cm-meta">${meta.map(esc).join(' · ')}</p>` : ''}
+      ${d.log ? `<p class="cm-last">Último contato (${fmtShort(d.log.at.slice(0, 10))}): <b>${esc(RESULTS.find((x) => x[0] === d.log.result)?.[1] || '')}</b> ${esc(d.log.note || '')}</p>` : ''}
+      <div class="cm-call">${d.phone ? `<a class="btn primary big" href="tel:+55${digits(d.phone)}">📞 ${esc(d.phone)}</a>` : ''}${d.phone && isMobile(d.phone) ? `<a class="btn big" href="${waLink(d.phone)}" target="_blank" rel="noopener">WhatsApp</a>` : ''}${d.phone2 ? `<a class="btn" href="tel:+55${digits(d.phone2)}">📞 ${esc(d.phone2)}</a>` : ''}${d.email ? `<a class="btn" href="mailto:${esc(d.email)}">E-mail</a>` : ''}</div>
+      <h4>Como foi?</h4>
+      <div class="cm-res"><button class="btn" data-act="callRes" data-r="sem_resposta">Não atendeu</button><button class="btn" data-act="callRes" data-r="conversa">Conversei</button><button class="btn ok" data-act="callRes" data-r="apresentacao">Apresentação marcada</button><button class="btn ok" data-act="callRes" data-r="proposta">Pediu proposta</button><button class="btn danger" data-act="callRes" data-r="sem_interesse">Sem interesse</button></div>
+      <div class="cm-opts"><label><span>Próximo contato</span><input type="date" id="cmDate" value="${addWeekdays(todayStr(), 2)}"></label><label class="full"><span>Anotação (opcional)</span><input id="cmNote" placeholder="Ex.: falar com a Dra. depois das 16h"></label></div>
+      <div class="cm-foot"><button class="btn sm ghost" data-act="callSkip">Pular</button>${c ? `<button class="btn sm ghost" data-act="callOpen" data-id="${c.id}">Abrir ficha</button>` : ''}</div>
+    </section><details class="cm-script" open><summary>Roteiro e objeções</summary><pre>${esc(S.settings.script || SCRIPT_DEFAULT)}</pre></details></div></div>`;
+}
+function callResult(res) {
+  const it = callItems()[0]; if (!it) return;
+  const c = it.c || ensureLead(it.uf, it.key); if (!c) return;
+  let d = $('#cmDate') ? $('#cmDate').value : ''; if (d && [0, 6].includes(parseD(d).getDay())) d = nextWeekday(d);
+  applyLeadResult(c, res, d, '', $('#cmNote') ? $('#cmNote').value.trim() : '');
+  ui.callDone++; save(); toast(RESULTS.find((x) => x[0] === res)[1]); callRender();
+}
