@@ -15,15 +15,15 @@ const MONTHS = [
     desc: 'Diagnóstico, acessos, posicionamento, campanhas iniciais e implantação da 24AGÁ.',
     outputs: ['Checklist de acessos', 'Baseline', 'Campanhas iniciais', 'Automação inicial', 'Primeiro relatório', 'Plano do mês 2'],
     items: [
-      { t: 'Diagnóstico da clínica', p: 'M', o: 'Tiago', d: 5, c: ['Faturamento base', 'Serviços e tickets', 'Margens estimadas', 'Capacidade de atendimento', 'Histórico de marketing', 'Metas individuais'] },
-      { t: 'Checklist de acessos (Instagram, Meta Business, contas de anúncio)', p: 'M', o: 'Micaela', d: 4, c: ['Instagram', 'Meta Business Manager', 'Conta de anúncios', 'Pixel / mensuração', 'WhatsApp da clínica'] },
-      { t: 'Definir responsável humano pelos fechamentos', p: 'C', o: 'Tiago', d: 5 },
-      { t: 'Procedimentos prioritários: análise de rentabilidade e decisão', p: 'M', o: 'Tiago', d: 8, c: ['Lista da clínica', 'Análise Roity', 'Recomendação registrada', 'Decisão da clínica registrada'] },
-      { t: 'Organização do Instagram e posicionamento inicial', p: 'B', o: 'Micaela', d: 12 },
-      { t: 'Planejamento de ofertas e calendário inicial', p: 'B', o: 'Tiago', d: 10 },
-      { t: 'Mensuração e campanhas iniciais Meta Ads', p: 'M', o: 'Tiago', d: 12, c: ['Mensuração configurada', 'Teste de público', 'Teste de oferta', 'Teste de criativo'] },
-      { t: 'Implantação inicial 24AGÁ', p: 'C', o: 'Tiago', d: 14, c: ['Procedimentos cadastrados', 'Fluxo de pré-atendimento', 'Encaminhamento para humano'] },
-      { t: 'Orientações de gravação para a clínica', p: 'B', o: 'Micaela', d: 7 },
+      { t: 'Checklist de acessos (Instagram, Meta Business, contas de anúncio)', p: 'M', o: 'Micaela', d: 1, c: ['Instagram', 'Meta Business Manager', 'Conta de anúncios', 'Pixel / mensuração', 'WhatsApp da clínica'] },
+      { t: 'Diagnóstico da clínica', p: 'M', o: 'Tiago', d: 2, c: ['Faturamento base', 'Serviços e tickets', 'Margens estimadas', 'Capacidade de atendimento', 'Histórico de marketing', 'Metas individuais'] },
+      { t: 'Definir responsável humano pelos fechamentos', p: 'C', o: 'Tiago', d: 2 },
+      { t: 'Procedimentos prioritários: análise de rentabilidade e decisão', p: 'M', o: 'Tiago', d: 4, c: ['Lista da clínica', 'Análise Roity', 'Recomendação registrada', 'Decisão da clínica registrada'] },
+      { t: 'Orientações de gravação para a clínica', p: 'B', o: 'Micaela', d: 5 },
+      { t: 'Planejamento de ofertas e calendário inicial', p: 'B', o: 'Tiago', d: 6 },
+      { t: 'Organização do Instagram e posicionamento inicial', p: 'B', o: 'Micaela', d: 8 },
+      { t: 'Mensuração e campanhas iniciais Meta Ads', p: 'M', o: 'Tiago', d: 10, c: ['Mensuração configurada', 'Teste de público', 'Teste de oferta', 'Teste de criativo'] },
+      { t: 'Implantação inicial 24AGÁ', p: 'C', o: 'Tiago', d: 12, c: ['Procedimentos cadastrados', 'Fluxo de pré-atendimento', 'Encaminhamento para humano'] },
       { t: 'Primeiro relatório e plano do mês 2', p: 'M', o: 'Tiago', d: 28 },
     ] },
   { n: 2, title: 'Treinamento de vendas e organização de leads', short: 'Vendas e leads', pillars: ['C', 'R'],
@@ -141,6 +141,9 @@ const ROUTINES = [
   { t: 'Revisão de métricas e alimentar resultados', p: 'M', o: 'Micaela', d: 25, h: 1 },
   { t: 'Relatório mensal (revisado por Tiago)', p: 'M', o: 'Tiago', d: 28, h: 1.5 },
 ];
+
+// sempre em ordem de dia
+MONTHS.forEach((m) => m.items.sort((a, b) => a.d - b.d));
 
 const CREATIVES_PER_MONTH = 6;
 

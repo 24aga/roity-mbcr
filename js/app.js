@@ -73,11 +73,12 @@ function monthData(clinic, n) {
       rotina: ROUTINES.map((i) => ({ title: i.t, pillar: i.p, owner: i.o, d: i.d })), state: null, isCurrent: false };
   }
   const tm = clinic.journey.template[n - 1];
-  const tasks = S.tasks.filter((t) => t.clinicId === clinic.id && t.month === n);
+  const tasks = S.tasks.filter((t) => t.clinicId === clinic.id && t.month === n).sort((a, b) => a.due.localeCompare(b.due) || (a.kind === 'novo' ? -1 : 1));
   return { title: tm.title, short: tm.short, pillars: tm.pillars, desc: tm.desc, outputs: tm.outputs,
     novo: tasks.filter((t) => t.kind === 'novo'), rotina: tasks.filter((t) => t.kind !== 'novo'), tasks,
     state: groupState(tasks), isCurrent: currentMonth(clinic) === n };
 }
+function dayOf(t) { const c = clinicById(t.clinicId); return c ? diffDays(monthStart(c, t.month), t.due) + 1 : t.d; }
 function overallFor(clinic) { return clinic ? groupState(S.tasks.filter((t) => t.clinicId === clinic.id)) : null; }
 
 // ================= VIEWS =================
@@ -168,13 +169,15 @@ function buildAlerts() {
 }
 
 const empty = (t) => `<div class="empty">${esc(t)}</div>`;
-function taskRow(t) {
+function taskRow(t, o = {}) {
   const c = clinicById(t.clinicId); const s = taskStatusLabel(t);
+  const how = o.how ? howTo(t.title) : '';
   return `<li class="trow ${t.status === 'concluido' ? 'done' : ''}">
     <button class="chk ${t.status === 'concluido' ? 'on' : ''}" data-act="done" data-id="${t.id}" aria-label="${t.status === 'concluido' ? 'Reabrir' : 'Concluir'}: ${esc(t.title)}">${t.status === 'concluido' ? '✓' : ''}</button>
     <button class="trow-b" data-act="task" data-id="${t.id}">
-      <span class="trow-t">${esc(t.title)}</span>
-      <span class="trow-s">${pillarTag(t.pillar)} ${c ? esc(c.name) + ' · ' : ''}Mês ${t.month} · ${esc(t.owner)} · ${fmtShort(t.due)}</span>
+      <span class="trow-t">${o.day ? `<span class="dayb">Dia ${dayOf(t)}</span>` : ''}${esc(t.title)}</span>
+      ${how ? `<span class="trow-h">${esc(how)}</span>` : ''}
+      <span class="trow-s">${pillarTag(t.pillar)} ${o.day ? (t.kind === 'novo' ? 'Novo · ' : 'Rotina · ') : c ? esc(c.name) + ' · Mês ' + t.month + ' · ' : ''}${esc(t.owner)} · ${fmtShort(t.due)}</span>
     </button>${pill(s.k, s.l)}</li>`;
 }
 
@@ -208,6 +211,7 @@ VIEWS.mapa = () => {
       onMonth: (n) => openPanel({ type: 'month', clinicId: clinic ? clinic.id : null, n }),
       onTask: (id) => openPanel({ type: 'task', id }),
       onTemplateItem: (n) => openPanel({ type: 'month', clinicId: null, n }),
+      dayOf,
       insetRight: () => (innerWidth > 760 && ui.panel ? Math.min(460, innerWidth) : 0),
     });
   } else if (ui.mapMode === 'linha') body.innerHTML = timelineHTML(clinic);
@@ -239,10 +243,10 @@ function timelineHTML(clinic) {
   }).join('')}</ol>`;
 }
 function branchItem(t, clinic) {
-  if (!clinic) return `<li><span class="dot" style="background:${PILLARS[t.pillar].color}"></span>${esc(t.title)} <small>${esc(t.owner)}</small></li>`;
+  if (!clinic) return `<li><span class="dayb">Dia ${t.d}</span><span class="bi"><span>${esc(t.title)}</span><small>${esc(t.owner)}</small></span></li>`;
   const s = taskStatusLabel(t);
   return `<li class="${t.status === 'concluido' ? 'done' : ''}"><button class="chk sm ${t.status === 'concluido' ? 'on' : ''}" data-act="done" data-id="${t.id}" aria-label="Concluir ${esc(t.title)}">${t.status === 'concluido' ? '✓' : ''}</button>
-    <span class="bi"><button class="lnk" data-act="task" data-id="${t.id}">${esc(t.title)}</button><small>${esc(t.owner)} · ${fmtShort(t.due)} ${s.k === 'atrasado' || s.k === 'bloqueado' ? pill(s.k, s.l) : ''}</small></span></li>`;
+    <span class="dayb">Dia ${dayOf(t)}</span><span class="bi"><button class="lnk" data-act="task" data-id="${t.id}">${esc(t.title)}</button><small>${esc(t.owner)} · ${fmtShort(t.due)} ${s.k === 'atrasado' || s.k === 'bloqueado' ? pill(s.k, s.l) : ''}</small></span></li>`;
 }
 function kanbanHTML(clinic) {
   if (!clinic) return empty('Escolha uma clínica para ver o Kanban das tarefas.');
@@ -603,9 +607,10 @@ function renderPanel() {
     const t = taskById(p.id); if (!t) { closePanel(); return; }
     const c = clinicById(t.clinicId); const s = taskStatusLabel(t);
     el.innerHTML = `
-      <div class="ph"><small>${c ? esc(c.name) : ''} · Mês ${t.month} · ${t.kind === 'novo' ? 'Nova implantação' : 'Rotina contínua'}</small>
+      <div class="ph"><small>${c ? esc(c.name) : ''} · Mês ${t.month} · <b>Dia ${dayOf(t)}</b> · ${t.kind === 'novo' ? 'Nova implantação' : 'Rotina contínua'}</small>
         <textarea class="ptitle pfocus" data-tf="title" rows="2" aria-label="Título">${esc(t.title)}</textarea>
         <div>${pillarTag(t.pillar)} ${pill(s.k, s.l)} ${t.meeting ? '<span class="pill">Reunião 60 min</span>' : ''}</div></div>
+      ${howTo(t.title) ? `<div class="howto"><b>O que fazer</b><p>${esc(howTo(t.title))}</p></div>` : ''}
       <button class="btn ${t.status === 'concluido' ? '' : 'primary'} block" data-act="done" data-id="${t.id}">${t.status === 'concluido' ? 'Reabrir tarefa' : '✓ Marcar como concluída'}</button>
       <div class="pgrid">
         <label><span>Status</span><select data-tf="status">${opt(TASK_STATUS, t.status)}</select></label>
@@ -630,10 +635,12 @@ function renderPanel() {
         <h2 class="pfocus" tabindex="-1">${esc(md.title)}</h2><div>${md.pillars.map(pillarTag).join(' ')} ${md.state ? pill(md.state.k, md.state.l + ' · ' + Math.round(md.state.p * 100) + '%') : ''}</div>
         <p>${esc(md.desc)}</p></div>
       ${md.state ? `<div class="bar"><i style="width:${md.state.p * 100}%"></i></div>` : ''}
-      <h4>Nova implantação do mês</h4>
-      ${c ? `<ul class="tlist">${md.novo.map(taskRow).join('')}</ul>` : `<ul class="plain">${md.novo.map((t) => `<li>${pillarTag(t.pillar)} ${esc(t.title)} <small>· ${t.owner} · dia ${t.d}</small>${t.c ? `<br><small class="muted">${t.c.map(esc).join(' · ')}</small>` : ''}</li>`).join('')}</ul>`}
-      <h4>Rotinas contínuas</h4>
-      ${c ? `<ul class="tlist">${md.rotina.map(taskRow).join('')}</ul>` : `<ul class="plain">${md.rotina.map((t) => `<li>${pillarTag(t.pillar)} ${esc(t.title)} <small>· ${t.owner}</small></li>`).join('')}<li>✎ Até ${CREATIVES_PER_MONTH} criativos (vídeo/imagem)</li></ul>`}
+      <h4>Roteiro dia a dia</h4>
+      ${c ? `<ul class="tlist">${md.tasks.map((t) => taskRow(t, { day: true, how: true })).join('')}</ul>`
+        : `<ul class="tlist">${md.novo.map((t) => ({ ...t, kind: 'novo' })).concat(md.rotina.map((t) => ({ ...t, kind: 'rotina' }))).sort((a, b) => a.d - b.d || (a.kind === 'novo' ? -1 : 1)).map((t) => `<li class="trow"><div class="trow-b">
+          <span class="trow-t"><span class="dayb">Dia ${t.d}</span>${esc(t.title)}</span>${howTo(t.title) ? `<span class="trow-h">${esc(howTo(t.title))}</span>` : ''}
+          <span class="trow-s">${pillarTag(t.pillar)} ${t.kind === 'novo' ? 'Novo' : 'Rotina'} · ${esc(t.owner)}${t.c ? ' · ☑ ' + t.c.map(esc).join(', ') : ''}</span></div></li>`).join('')}</ul>
+          <p class="hint">✎ Além disso: até ${CREATIVES_PER_MONTH} criativos no mês (vídeo/imagem).</p>`}
       ${c ? `<h4>Criativos do mês</h4><p>${crs.filter((x) => ['em_uso', 'aprovado'].includes(x.status)).length} aprovados/em uso · ${crs.filter((x) => x.status === 'nao_necessario').length} não necessários · ${crs.filter((x) => !['em_uso', 'aprovado', 'nao_necessario'].includes(x.status)).length} em produção
         <button class="btn sm" data-act="goCr" data-c="${c.id}" data-n="${p.n}">Abrir criativos</button></p>` : ''}
       <h4>Saídas verificáveis</h4><ul class="plain">${md.outputs.map((o) => `<li>◆ ${esc(o)}</li>`).join('')}</ul>
