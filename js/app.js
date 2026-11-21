@@ -67,6 +67,7 @@ function render() {
   const title = (NAV.find((n) => n[0] === navKey) || [0, 'Roity'])[1];
   $('#topTitle').textContent = title;
   fn();
+  const rk = location.hash.split('?')[0]; if (rk !== ui.lastRouteKey) { ui.lastRouteKey = rk; const v = view(); v.classList.remove('enter'); void v.offsetWidth; v.classList.add('enter'); }
   if (ui.panel) renderPanel();
   if (route.name === 'config') renderSyncBadge();
 }
@@ -90,7 +91,7 @@ function setTask(t, field, value) {
   log(`Tarefa “${t.title}” — ${what}`, t.clinicId);
 }
 const statusName = (k) => (TASK_STATUS.find((s) => s[0] === k) || [k, k])[1];
-function toggleDone(id) { const t = taskById(id); if (!t) return; setTask(t, 'status', t.status === 'concluido' ? 'a_fazer' : 'concluido'); rerender(); toast(t.status === 'concluido' ? 'Tarefa concluída' : 'Tarefa reaberta'); }
+function toggleDone(id) { const t = taskById(id); if (!t) return; ui.justDone = t.status === 'concluido' ? null : id; clearTimeout(ui.jdT); ui.jdT = setTimeout(() => (ui.justDone = null), 900); setTask(t, 'status', t.status === 'concluido' ? 'a_fazer' : 'concluido'); rerender(); toast(t.status === 'concluido' ? 'Tarefa concluída' : 'Tarefa reaberta'); }
 
 function monthData(clinic, n) {
   if (!clinic) {
@@ -137,7 +138,7 @@ function todayHTML(c, compact) {
   const grp = (title, list, cls, how) => list.length ? `<h4 class="dg ${cls}">${title} <small>${list.length}</small></h4><ul class="tlist">${list.map((t) => taskRow(t, { day: true, how })).join('')}</ul>` : '';
   if (compact) {
     const list = now.slice(0, 5);
-    return `${list.length ? `<ul class="tlist">${list.map((t) => taskRow(t, { day: true })).join('')}</ul>` : `<div class="free">✓ Nada para hoje.${p.next ? ` Próxima: <b>Dia ${dayOf(p.next)}</b> · ${esc(p.next.title)}` : ''}</div>`}
+    return `${list.length ? `<ul class="tlist">${list.map((t) => taskRow(t, { day: true })).join('')}</ul>` : `<div class="free">✓ Tudo em dia por hoje.${p.next ? ` Próxima: <b>Dia ${dayOf(p.next)}</b> · ${esc(p.next.title)}` : ''}</div>`}
       <a class="link" href="#/clinica/${c.id}" data-act="openToday" data-id="${c.id}">Abrir o dia completo →</a>`;
   }
   const md = p.inJourney ? monthData(c, p.n) : null;
@@ -147,7 +148,7 @@ function todayHTML(c, compact) {
       <h2>${dayHeader(c, p)}</h2>
       ${md ? `<p>${esc(md.desc)}</p><div class="wk-p"><div class="bar"><i style="width:${md.state.p * 100}%"></i></div><span>${Math.round(md.state.p * 100)}% do mês · ${md.state.done}/${md.state.total}</span></div>` : ''}
     </section>
-    ${now.length ? '' : `<div class="free big">✓ Nenhuma entrega do método vence hoje ou nos próximos 2 dias.${p.next ? `<br>Próxima: <b>Dia ${dayOf(p.next)}</b> — ${esc(p.next.title)} (${fmtShort(p.next.due)}). Dá para adiantar.` : ''}</div>`}
+    ${now.length ? '' : `<div class="free big"><b>✓ Tudo em dia.</b> Nenhuma entrega vence hoje ou nos próximos 2 dias.${p.next ? `<br>Próxima: <b>Dia ${dayOf(p.next)}</b> — ${esc(p.next.title)} (${fmtShort(p.next.due)}). Dá para adiantar.` : ''}</div>`}
     ${grp('Atrasadas — resolver primeiro', p.late, 'late', true)}
     ${grp('Fazer hoje', p.hoje, 'today', true)}
     ${grp('Começar agora (vence em até 2 dias)', p.comecar, 'soon', true)}
@@ -187,14 +188,27 @@ VIEWS.visao = () => {
     ${hasDemo ? `<div class="notice demo-n"><span>Você está vendo <b>dados de demonstração</b> (marcados DEMO).</span><button class="btn sm danger" data-act="clearDemo">Apagar clínicas DEMO</button></div>` : ''}
     ${(() => { const real = S.clinics.some((c) => !c.demo); const lb = S.settings.lastBackup; const days = lb ? diffDays(lb, today) : null;
       return real && !Sync.enabled() && (days == null || days >= 7) ? `<div class="notice warn demo-n"><span>💾 ${days == null ? 'Você ainda não fez nenhum backup.' : `Último backup há ${days} dias.`} Seus dados ficam só neste aparelho.</span><button class="btn sm primary" data-act="exportJSON">Baixar backup agora</button></div>` : ''; })()}
-    <div class="hello"><small>${fmtDate(today, { weekday: 'long', day: '2-digit', month: 'long' })}</small><h2>${hello}, ${esc(S.me)}.</h2>
-      <p>${overdue.length ? `<b class="red">${pl(overdue.length, 'entrega atrasada', 'entregas atrasadas')}</b> · ` : ''}${upcoming.length ? `${pl(open.filter((t) => t.due <= wEnd).length, 'entrega', 'entregas')} até ${fmtShort(wEnd)}` : 'Nada vencendo esta semana'} · ${pl(meetings.length, 'reunião', 'reuniões')}</p></div>
-    <div class="kpis k4">
+    <div class="hello"><small>${fmtDate(today, { weekday: 'long', day: '2-digit', month: 'long' })}</small><h2>${hello}, ${esc(S.me)}.</h2></div>
+    ${(() => {
+      const nowN = overdue.length + todayT.length;
+      const soonN = open.filter((t) => t.due > today && t.due <= addDays(today, 2)).length;
+      const doneToday = S.tasks.filter((t) => t.status === 'concluido' && t.doneAt === today && clinicById(t.clinicId)).length;
+      return `<section class="today-hero ${nowN ? '' : 'clear'}">
+        <div class="th-main"><small>PARA FAZER HOJE</small>
+          <b class="th-num">${nowN}</b>
+          <span>${nowN ? `${overdue.length ? `<em class="th-late">${pl(overdue.length, 'atrasada', 'atrasadas')}</em> · ` : ''}${pl(todayT.length, 'vence hoje', 'vencem hoje')}` : 'Tudo em dia ✓'}</span></div>
+        <div class="th-side">
+          <div><b>${soonN}</b><span>em até 2 dias</span></div>
+          <div><b>${meetings.length}</b><span>${meetings.length === 1 ? 'reunião na semana' : 'reuniões na semana'}</span></div>
+          <div><b>${doneToday}</b><span>${doneToday === 1 ? 'concluída hoje' : 'concluídas hoje'}</span></div>
+        </div>
+        <a class="btn th-btn" href="#/tarefas" data-act="tf" data-f="hoje">Ver tarefas de hoje →</a>
+      </section>`; })()}
+    <div class="kpis k3 mini">
       <a class="kpi" href="#/clinicas"><span>Clínicas ativas</span><b>${active.length}<small> / ${goal}</small></b>
         <div class="bar"><i style="width:${Math.min(100, (active.length / goal) * 100)}%"></i></div></a>
       <a class="kpi" href="#/financeiro"><span>Receita mensal</span><b>${money(mrr)}</b><em>Meta: ${money(goal * 2500)}</em></a>
-      <a class="kpi ${overdue.length ? 'warn' : ''}" href="#/tarefas" data-act="tf" data-f="atrasadas"><span>Atrasadas</span><b>${overdue.length}</b><em>${todayT.length} para hoje</em></a>
-      <a class="kpi" href="#/criativos"><span>Criativos em produção</span><b>${pendingCr.length}</b><em>No mês atual das clínicas</em></a>
+      <a class="kpi" href="#/criativos"><span>Criativos em produção</span><b>${pendingCr.length}</b><em>No mês atual</em></a>
     </div>
     <h3 class="sec-t">Hoje em cada clínica</h3>
     ${weekClinics.length ? `<div class="wk">${weekClinics.map(({ c, n, tasks, st }) => `
@@ -208,7 +222,7 @@ VIEWS.visao = () => {
     <div class="grid2">
       <section class="card">
         <header><h3>Alertas</h3></header>
-        ${alerts.length ? `<ul class="alerts">${alerts.map((a) => `<li class="al-${a.k}"><b>${esc(a.t)}</b><span>${a.d}</span></li>`).join('')}</ul>` : empty('Sem alertas no momento.')}
+        ${alerts.length ? `<ul class="alerts">${alerts.map((a) => `<li class="al-${a.k}"><b>${esc(a.t)}</b><span>${a.d}</span></li>`).join('')}</ul>` : empty('Nenhum alerta. Tudo certo por aqui ✓', 'cloudOk')}
       </section>
       <section class="card">
         <header><h3>Carga de trabalho estimada (mês)</h3><a class="link" href="#/config">Ajustar →</a></header>
@@ -246,11 +260,11 @@ function buildAlerts() {
   return out.slice(0, 12);
 }
 
-const empty = (t) => `<div class="empty">${esc(t)}</div>`;
+const empty = (t, ic = 'tarefas') => `<div class="empty">${icon(ic, 'empty-ic')}<p>${esc(t)}</p></div>`;
 function taskRow(t, o = {}) {
   const c = clinicById(t.clinicId); const s = taskStatusLabel(t);
   const how = o.how ? howTo(t.title) : '';
-  return `<li class="trow ${t.status === 'concluido' ? 'done' : ''}">
+  return `<li class="trow ${t.status === 'concluido' ? 'done' : ''} ${ui.justDone === t.id ? 'just-done' : ''}">
     <button class="chk ${t.status === 'concluido' ? 'on' : ''}" data-act="done" data-id="${t.id}" aria-label="${t.status === 'concluido' ? 'Reabrir' : 'Concluir'}: ${esc(t.title)}">${t.status === 'concluido' ? '✓' : ''}</button>
     <button class="trow-b" data-act="task" data-id="${t.id}">
       <span class="trow-t">${o.day ? `<span class="dayb">Dia ${dayOf(t)}</span>` : ''}${esc(t.title)}</span>
@@ -365,7 +379,7 @@ VIEWS.clinicas = () => {
             <span>${segLabel(c.segment)} · ${esc(c.city || '—')}${c.uf ? '/' + esc(c.uf) : ''}</span>
             ${st ? `<div class="bar sm"><i style="width:${st.p * 100}%"></i></div><small>${n > 12 ? 'Jornada encerrada' : n ? 'Mês ' + n + ' de 12' : 'Começa ' + fmtShort(c.startDate)} · ${Math.round(st.p * 100)}%</small>` : '<small>Jornada não iniciada</small>'}</a>`;
         }).join('') || '<div class="pempty">—</div>'}</section>`;
-    }).join('')}</div>` : empty('Nenhuma clínica ainda. Cadastre a primeira.')}`;
+    }).join('')}</div>` : empty('Nenhuma clínica ainda. Toque em + Clínica para cadastrar a primeira.', 'clinicas')}`;
 };
 
 VIEWS.clinica = () => {
@@ -408,7 +422,7 @@ VIEWS.clinica = () => {
   } else if (ui.clinicTab === 'tarefas') {
     const list = S.tasks.filter((t) => t.clinicId === c.id && t.status !== 'concluido').sort((a, b) => a.due.localeCompare(b.due));
     body = `<div class="page-h"><span class="muted">${list.length} tarefas em aberto</span><button class="btn sm" data-act="newTask" data-c="${c.id}">+ Tarefa</button></div>
-      <section class="card"><ul class="tlist">${list.slice(0, 80).map(taskRow).join('') || empty('Tudo concluído.')}</ul></section>`;
+      <section class="card"><ul class="tlist">${list.slice(0, 80).map(taskRow).join('') || empty('Tudo concluído ✓')}</ul></section>`;
   } else if (ui.clinicTab === 'contrato') {
     const exp = 6 * ((+c.price || 0) + (+c.mediaBudget || 0));
     body = `<div class="grid2"><section class="card"><header><h3>Meta individual e garantia</h3><button class="btn sm" data-act="editClinic" data-id="${c.id}">Editar</button></header>
@@ -467,7 +481,7 @@ VIEWS.tarefas = () => {
     <p class="hint swipe-hint">Dica: arraste uma tarefa para a direita para concluir.</p>
     <div class="bulk" hidden><span></span><button class="btn sm" data-act="bulkDone">Concluir selecionadas</button><select data-act="bulkOwner"><option value="">Atribuir a…</option>${optS(OWNERS)}</select></div>
     ${list.length ? Object.entries(groups).map(([cid, ts]) => `<section class="card"><header><h3>${esc(clinicById(cid).name)}${demoBadge(clinicById(cid))}</h3><span class="muted">${ts.length}</span></header>
-      <ul class="tlist tsel">${ts.map((t) => `<li class="sel-wrap"><input type="checkbox" class="bsel" value="${t.id}" aria-label="Selecionar ${esc(t.title)}">${taskRow(t).replace(/^<li[^>]*>|<\/li>$/g, '')}</li>`).join('')}</ul></section>`).join('') + (list.length > 300 ? '<p class="hint">Mostrando as 300 primeiras. Use os filtros.</p>' : '') : empty('Nenhuma tarefa com esses filtros.')}`;
+      <ul class="tlist tsel">${ts.map((t) => `<li class="sel-wrap"><input type="checkbox" class="bsel" value="${t.id}" aria-label="Selecionar ${esc(t.title)}">${taskRow(t).replace(/^<li[^>]*>|<\/li>$/g, '')}</li>`).join('')}</ul></section>`).join('') + (list.length > 300 ? '<p class="hint">Mostrando as 300 primeiras. Use os filtros.</p>' : '') : empty('Nenhuma tarefa com esses filtros.', 'search')}`;
 };
 
 // ---------- Calendário ----------
@@ -495,7 +509,7 @@ VIEWS.calendario = () => {
       <button class="btn sm ghost" data-act="calNav" data-d="0">Hoje</button></div>
     <div class="cal-wrap"><div class="cal">${['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'].map((d) => `<div class="cw">${d}</div>`).join('')}${cells}</div>
     <section class="card"><header><h3>${fmtDate(sel, { weekday: 'long', day: '2-digit', month: 'long' })}</h3></header>
-      ${selList.length ? `<ul class="tlist">${selList.map(taskRow).join('')}</ul>` : empty('Nada neste dia.')}
+      ${selList.length ? `<ul class="tlist">${selList.map(taskRow).join('')}</ul>` : empty('Dia livre na agenda.', 'calendario')}
       <p class="hint">Calendário interno do app. Integração com Google Agenda e lembretes por e-mail ainda não estão ativos.</p></section></div>`;
 };
 
@@ -747,7 +761,7 @@ VIEWS.proposta = () => {
       <section class="card"><header><h3>Propostas de ${esc(c.name)}</h3></header>
         ${list.length ? `<ul class="tlist">${list.map((x) => { const t = propTotals(x); return `<li class="trow"><a class="trow-b" href="#/proposta/${c.id}/${x.id}">
           <span class="trow-t">${esc(x.title || 'Proposta')} · ${fmtDate(x.date)}</span><span class="trow-s">${{ enviada: 'Enviada', aceita: '✓ Aceita' }[x.status] || 'Rascunho'} · 1º mês ${money(t.first)} · válida até ${fmtDate(x.validUntil)}</span></a>
-          <button class="btn sm" data-act="propDup" data-c="${c.id}" data-id="${x.id}">Duplicar</button></li>`; }).join('')}</ul>` : empty('Nenhuma proposta ainda. Crie a primeira.')}
+          <button class="btn sm" data-act="propDup" data-c="${c.id}" data-id="${x.id}">Duplicar</button></li>`; }).join('')}</ul>` : empty('Nenhuma proposta ainda. Toque em + Nova proposta.', 'financeiro')}
       </section>`;
     return;
   }

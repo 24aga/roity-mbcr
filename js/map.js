@@ -252,6 +252,7 @@ class MindMap {
   applyView() {
     const v = this.view;
     this.world.setAttribute('transform', `translate(${v.x},${v.y}) scale(${v.k})`);
+    this.root.classList.toggle('far', v.k < 0.5); this.root.classList.toggle('mid', v.k >= 0.5 && v.k < 0.8);
     const { W, H } = this.size();
     const r = this.mini.querySelector('.mini-view');
     r.setAttribute('x', (-v.x) / v.k); r.setAttribute('y', (-v.y) / v.k);
