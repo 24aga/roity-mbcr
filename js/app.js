@@ -44,6 +44,7 @@ function render() {
   $('#topTitle').textContent = title;
   fn();
   if (ui.panel) renderPanel();
+  if (route.name === 'config') renderSyncBadge();
 }
 function rerender() {
   save();
@@ -161,7 +162,7 @@ VIEWS.visao = () => {
   view().innerHTML = `
     ${hasDemo ? `<div class="notice demo-n"><span>Você está vendo <b>dados de demonstração</b> (marcados DEMO).</span><button class="btn sm danger" data-act="clearDemo">Apagar clínicas DEMO</button></div>` : ''}
     ${(() => { const real = S.clinics.some((c) => !c.demo); const lb = S.settings.lastBackup; const days = lb ? diffDays(lb, today) : null;
-      return real && (days == null || days >= 7) ? `<div class="notice warn demo-n"><span>💾 ${days == null ? 'Você ainda não fez nenhum backup.' : `Último backup há ${days} dias.`} Seus dados ficam só neste aparelho.</span><button class="btn sm primary" data-act="exportJSON">Baixar backup agora</button></div>` : ''; })()}
+      return real && !Sync.enabled() && (days == null || days >= 7) ? `<div class="notice warn demo-n"><span>💾 ${days == null ? 'Você ainda não fez nenhum backup.' : `Último backup há ${days} dias.`} Seus dados ficam só neste aparelho.</span><button class="btn sm primary" data-act="exportJSON">Baixar backup agora</button></div>` : ''; })()}
     <div class="hello"><small>${fmtDate(today, { weekday: 'long', day: '2-digit', month: 'long' })}</small><h2>${hello}, ${esc(S.me)}.</h2>
       <p>${overdue.length ? `<b class="red">${overdue.length} entrega(s) atrasada(s)</b> · ` : ''}${upcoming.length ? `${open.filter((t) => t.due <= wEnd).length} entrega(s) até ${fmtShort(wEnd)}` : 'Nada vencendo esta semana'} · ${meetings.length} reunião(ões)</p></div>
     <div class="kpis k4">
@@ -798,7 +799,7 @@ VIEWS.config = () => {
     <div class="grid2">
       <section class="card"><header><h3>Quem está usando</h3></header>
         <div class="seg">${['Tiago', 'Micaela'].map((p) => `<button aria-selected="${S.me === p}" data-act="me" data-p="${p}">${p}</button>`).join('')}</div>
-        <p class="hint">Usado no histórico (“quem mudou o quê”). Não é login: os dados ficam neste aparelho.</p>
+        <p class="hint">Usado no histórico (“quem mudou o quê”).</p>
         <h4>Tema</h4><div class="seg">${[['auto', 'Automático'], ['light', 'Claro'], ['dark', 'Escuro']].map(([k, l]) => `<button aria-selected="${st.theme === k}" data-act="theme" data-t="${k}">${l}</button>`).join('')}</div>
       </section>
       <section class="card"><header><h3>Capacidade e metas</h3></header>
@@ -811,10 +812,25 @@ VIEWS.config = () => {
           <label><span>Limite de revisões por criativo</span><input type="number" name="reviewLimit" value="${st.reviewLimit}"></label>
           <button class="btn primary">Salvar</button></form></section>
       <section class="card"><header><h3>Backup e exportação</h3></header>
-        <p>Seus dados ficam salvos <b>neste aparelho</b> (${(used / 1024).toFixed(0)} KB). Último backup: <b>${S.settings.lastBackup ? fmtDate(S.settings.lastBackup) : 'nunca'}</b>. Faça backup de vez em quando e para passar dados entre celular e computador.</p>
+        <p>${Sync.enabled() ? 'Seus dados ficam neste aparelho e na nuvem (sincronizados).' : 'Seus dados ficam salvos <b>neste aparelho</b>.'} (${(used / 1024).toFixed(0)} KB). Último backup: <b>${S.settings.lastBackup ? fmtDate(S.settings.lastBackup) : 'nunca'}</b>. Faça backup de vez em quando e para passar dados entre celular e computador.</p>
         <div class="btns"><button class="btn primary" data-act="exportJSON">Baixar backup (.json)</button>
         <label class="btn">Restaurar backup<input type="file" accept="application/json,.json" data-act="importJSON" hidden></label></div>
         <div class="btns"><button class="btn sm" data-act="csv" data-k="clinics">CSV clínicas</button><button class="btn sm" data-act="csv" data-k="tasks">CSV tarefas</button></div>
+      </section>
+      <section class="card full sync-card"><header><h3>☁ Sincronizar celular e computador</h3></header>
+        ${Sync.enabled() ? `<p>Status: <b id="syncState">…</b></p>
+          <p class="hint">Repositório privado: <b>${esc(Sync.cfg().repo)}</b>. Tudo que você muda aqui aparece nos outros aparelhos conectados em poucos segundos (ao abrir o app ou voltar para ele).</p>
+          <div class="btns"><button class="btn primary" data-act="syncNow">Sincronizar agora</button><button class="btn danger" data-act="syncOff">Desconectar este aparelho</button></div>`
+        : `<p>Hoje os dados ficam só neste aparelho. Conecte <b>uma vez em cada aparelho</b> para o PC e o celular mostrarem sempre a mesma coisa. Os dados ficam no seu repositório <b>privado</b> do GitHub (${esc(SYNC_DEFAULT.repo)}).</p>
+          <ol class="steps">
+            <li>Abra <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener">github.com → Fine-grained token</a> (entre na sua conta se pedir).</li>
+            <li><b>Token name:</b> Roity MBCR · <b>Expiration:</b> a maior disponível.</li>
+            <li><b>Repository access:</b> <i>Only select repositories</i> → escolha <b>roity-mbcr-dados</b>.</li>
+            <li><b>Permissions → Repository permissions → Contents:</b> <i>Read and write</i>.</li>
+            <li>Toque em <b>Generate token</b>, copie e cole abaixo.</li>
+          </ol>
+          <form class="addrow" data-form="syncConnect"><input type="password" name="token" placeholder="Cole o token aqui (github_pat_…)" autocomplete="off" required aria-label="Token do GitHub"><button class="btn primary">Conectar</button></form>
+          <p class="hint">Conecte primeiro no aparelho que tem os dados certos (ex.: o PC) e escolha enviar os dados dele. Depois conecte o celular e escolha usar os dados da nuvem. O token fica salvo só neste aparelho e não vai no backup.</p>`}
       </section>
       <section class="card"><header><h3>Dados</h3></header>
         <div class="btns"><button class="btn" data-act="clearDemo">Remover dados DEMO</button><button class="btn" data-act="addDemo">Recriar dados DEMO</button><button class="btn danger" data-act="wipe">Apagar tudo</button></div>
@@ -944,6 +960,19 @@ function toCSV(rows, cols) {
   const q = (v) => { const s = v == null ? '' : String(v); return /[";\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
   return '﻿' + cols.join(';') + '\n' + rows.map((r) => cols.map((c) => q(r[c])).join(';')).join('\n');
 }
+function renderSyncBadge() {
+  const b = document.getElementById('syncBadge'); if (!b) return;
+  const map = { off: ['☁', 'Sincronizar', 'off'], ok: ['✓', 'Sincronizado', 'ok'], syncing: ['↻', 'Sincronizando…', 'busy'], offline: ['⚠', 'Offline', 'warn'], error: ['⚠', 'Erro na sincronização', 'err'], conflict: ['⚠', 'Conflito', 'warn'] };
+  const [i, l, k] = map[Sync.state] || map.off;
+  b.className = 'sync-b ' + k; b.innerHTML = `<span>${i}</span><em>${l}</em>`; b.title = Sync.msg || l;
+  if (route.name === 'config') { const st = document.getElementById('syncState'); if (st) st.textContent = l + (Sync.msg ? ' — ' + Sync.msg : ''); }
+}
+function onRemoteApplied() {
+  applyTheme();
+  const busyForm = $('#modal').open || document.activeElement && ['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement.tagName);
+  if (!busyForm) { const y = $('.main').scrollTop; render(); $('.main').scrollTop = y; }
+  toast('Dados atualizados de outro aparelho');
+}
 function isDark() { const t = S.settings.theme; return t === 'dark' || (t === 'auto' && matchMedia('(prefers-color-scheme: dark)').matches); }
 function applyTheme() {
   const t = S.settings.theme; const root = document.documentElement;
@@ -996,6 +1025,8 @@ document.addEventListener('click', (e) => {
     addDemo: () => { seedDemo(); save(); render(); toast('Dados DEMO criados'); },
     wipe: () => { if (confirm('Apagar TODOS os dados deste aparelho? Faça backup antes.') && confirm('Tem certeza? Não dá para desfazer.')) { const me = S.me; S = defaultState(); S.me = me; saveNow(); render(); toast('Tudo apagado'); } },
     print: () => window.print(),
+    syncNow: () => { Sync.setMeta({}); Sync.meta().dirty ? Sync.push() : Sync.pull(); },
+    syncOff: () => { if (confirm('Desconectar a sincronização neste aparelho? Os dados continuam aqui, só param de sincronizar.')) { Sync.disconnect(); render(); } },
     themeToggle: () => { S.settings.theme = isDark() ? 'light' : 'dark'; applyTheme(); save(); render(); },
     presGo: () => { ui.presMonth = Math.min(12, Math.max(1, +d.n)); renderPresMonth(); },
     more: () => { $('#moreSheet').hidden = !$('#moreSheet').hidden; },
@@ -1069,6 +1100,10 @@ document.addEventListener('submit', (e) => {
     S.tasks.push(t); log(`Criou tarefa “${t.title}”`, t.clinicId); closeModal(); rerender(); openPanel({ type: 'task', id: t.id });
   } else if (kind === 'chkAdd') {
     const t = taskById(ui.panel.id); if (!g('t')) return; t.checklist.push({ t: g('t'), done: false }); rerender(); setTimeout(() => $('#panel [name="t"]')?.focus(), 30);
+  } else if (kind === 'syncConnect') {
+    const tok = g('token'); if (!tok) return;
+    f.querySelector('button').disabled = true; toast('Conectando…');
+    Sync.connect(tok).then((ok) => { if (ok) toast('Sincronização ligada'); else { alert('Não consegui conectar: ' + (Sync.msg || 'confira o token e a permissão Contents (Read and write) no repositório roity-mbcr-dados.')); Sync.disconnect(); } render(); });
   } else if (kind === 'settings') {
     Object.assign(S.settings, { goalClinics: n('goalClinics') || 20, workDays: n('workDays') || 21, hoursPerCreative: n('hoursPerCreative') ?? 0.25, reviewLimit: n('reviewLimit') ?? 2 });
     S.settings.capacity = { Tiago: n('capT') ?? 4, Micaela: n('capM') ?? 4 }; save(); toast('Configurações salvas');
@@ -1103,6 +1138,7 @@ function boot() {
   applyTheme();
   window.addEventListener('hashchange', () => { closePanel(); $('#moreSheet').hidden = true; render(); $('.main').scrollTop = 0; });
   render();
+  renderSyncBadge(); Sync.start();
   if ('serviceWorker' in navigator && location.protocol !== 'file:') navigator.serviceWorker.register('sw.js').catch(() => {});
 }
 boot();

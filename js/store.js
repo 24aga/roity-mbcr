@@ -60,14 +60,23 @@ function load() {
 }
 
 let saveTimer;
+function touch() { S.updatedAt = new Date().toISOString(); if (typeof Sync !== 'undefined') Sync.changed(); }
 function save() {
+  touch();
   clearTimeout(saveTimer);
   saveTimer = setTimeout(() => {
     try { localStorage.setItem(STORE_KEY, JSON.stringify(S)); }
     catch (e) { alert('Não foi possível salvar no aparelho: ' + e.message); }
   }, 80);
 }
-function saveNow() { clearTimeout(saveTimer); localStorage.setItem(STORE_KEY, JSON.stringify(S)); }
+function saveNow() { touch(); clearTimeout(saveTimer); localStorage.setItem(STORE_KEY, JSON.stringify(S)); }
+// recebe os dados vindos de outro aparelho (não marca como alteração local)
+function applyRemote(data) {
+  clearTimeout(saveTimer);
+  S = Object.assign(defaultState(), data, { settings: Object.assign(defaultState().settings, data.settings) });
+  try { localStorage.setItem(STORE_KEY, JSON.stringify(S)); } catch (e) {}
+  if (typeof onRemoteApplied === 'function') onRemoteApplied();
+}
 
 function log(what, clinicId) {
   S.log.unshift({ at: new Date().toISOString(), who: S.me, what, clinicId: clinicId || null });

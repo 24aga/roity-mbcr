@@ -15,7 +15,11 @@ App pessoal para gerir a assessoria Roity e a jornada MBCR (Marketing, Branding,
 - **Financeiro**: MRR, meta de 20 clínicas, implantações. A verba de mídia não entra na receita.
 - **Backup** em .json, restauração, exportação CSV, tema claro/escuro, funciona offline.
 
-## Onde ficam os dados
+## Sincronizar PC e celular
+
+Em **Configurações → Sincronizar celular e computador**, cole um token do GitHub (fine-grained, só com acesso ao repositório privado `roity-mbcr-dados`, permissão *Contents: Read and write*). Faça uma vez em cada aparelho. Os dados vão para `dados.json` nesse repositório privado; o token fica só no aparelho.
+
+## Onde ficam os dados (sem sincronizar)
 
 No próprio aparelho (armazenamento do navegador / do app instalado). **Não há servidor nem login.** Por isso:
 - celular e computador têm dados separados. Use *Configurações → Baixar backup* e *Restaurar backup* para passar de um para o outro;
