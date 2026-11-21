@@ -93,6 +93,13 @@ function currentMonth(clinic, today = todayStr()) {
   return 13; // jornada encerrada
 }
 
+const AGENDAS = {
+  1: 'PAUTA\n1. Resultados do período (investimento, contatos, agendamentos, pacientes)\n2. O que foi feito desde a última reunião\n3. Campanhas e criativos: o que manter e o que mudar\n4. Novidade do mês no método\n5. Pendências da clínica\n\nATA\nPresentes:\nDecisões:\nPróximos passos (quem / até quando):',
+  2: 'PAUTA\n1. Atendimento: tempo de resposta, confirmações e faltas\n2. Revisão de conversas reais\n3. Treinamento do dia (objeções e fechamento)\n4. Registro de contatos e fechamentos\n5. Combinados para as próximas 2 semanas\n\nATA\nPresentes:\nDecisões:\nPróximos passos (quem / até quando):',
+};
+function agendaFor(title) { return /^Reunião 2/.test(title) ? AGENDAS[2] : AGENDAS[1]; }
+function fillAgendas() { let n = 0; S.tasks.forEach((t) => { if (t.meeting && !(t.notes || '').trim()) { t.notes = agendaFor(t.title); n++; } }); return n; }
+
 function startJourney(clinic) {
   // copia o modelo atual para a clínica (snapshot)
   clinic.journey = { startedAt: new Date().toISOString(), template: MONTHS.map((m) => ({ n: m.n, title: m.title, short: m.short, pillars: m.pillars, desc: m.desc, outputs: m.outputs })) };
@@ -102,7 +109,7 @@ function startJourney(clinic) {
       id: uid(), clinicId: clinic.id, month: m.n, kind, pillar: it.p, title: it.t,
       owner: it.o, due: addDays(base, it.d - 1), priority: kind === 'novo' ? 'alta' : 'media',
       status: 'a_fazer', checklist: (it.c || []).map((t) => ({ t, done: false })), meeting: !!it.meeting,
-      hours: it.h || 1, evidence: '', notes: '', doneAt: null, history: [{ at: new Date().toISOString(), who: S.me, what: 'Criada pela jornada MBCR' }],
+      hours: it.h || 1, evidence: '', notes: it.meeting ? agendaFor(it.t) : '', doneAt: null, history: [{ at: new Date().toISOString(), who: S.me, what: 'Criada pela jornada MBCR' }],
     });
     m.items.forEach((it) => S.tasks.push(mk(it, 'novo')));
     ROUTINES.forEach((it) => {

@@ -33,6 +33,7 @@ const ICONS = {
   config: '<path d="M4 6.5h9M17 6.5h3M4 12h3M11 12h9M4 17.5h11M19 17.5h1"/><circle cx="15" cy="6.5" r="2"/><circle cx="9" cy="12" r="2"/><circle cx="17" cy="17.5" r="2"/>',
   mais: '<circle cx="5" cy="12" r="1.3"/><circle cx="12" cy="12" r="1.3"/><circle cx="19" cy="12" r="1.3"/>',
   plus: '<path d="M12 5v14M5 12h14"/>',
+  search: '<circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/>',
   sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.3 5.3l1.4 1.4M17.3 17.3l1.4 1.4M5.3 18.7l1.4-1.4M17.3 6.7l1.4-1.4"/>',
   moon: '<path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/>',
   cloud: '<path d="M7 18.5h10a4 4 0 0 0 .6-7.95A6 6 0 0 0 6.2 9.6 4.5 4.5 0 0 0 7 18.5z"/>',
@@ -463,6 +464,7 @@ VIEWS.tarefas = () => {
       <select data-act="tstatus" aria-label="Status"><option value="">Status: todos</option>${opt(TASK_STATUS, ui.taskStatus)}</select>
       <button class="btn sm" data-act="newTask">+ Tarefa</button>
     </div>
+    <p class="hint swipe-hint">Dica: arraste uma tarefa para a direita para concluir.</p>
     <div class="bulk" hidden><span></span><button class="btn sm" data-act="bulkDone">Concluir selecionadas</button><select data-act="bulkOwner"><option value="">Atribuir a…</option>${optS(OWNERS)}</select></div>
     ${list.length ? Object.entries(groups).map(([cid, ts]) => `<section class="card"><header><h3>${esc(clinicById(cid).name)}${demoBadge(clinicById(cid))}</h3><span class="muted">${ts.length}</span></header>
       <ul class="tlist tsel">${ts.map((t) => `<li class="sel-wrap"><input type="checkbox" class="bsel" value="${t.id}" aria-label="Selecionar ${esc(t.title)}">${taskRow(t).replace(/^<li[^>]*>|<\/li>$/g, '')}</li>`).join('')}</ul></section>`).join('') + (list.length > 300 ? '<p class="hint">Mostrando as 300 primeiras. Use os filtros.</p>' : '') : empty('Nenhuma tarefa com esses filtros.')}`;
@@ -744,7 +746,7 @@ VIEWS.proposta = () => {
       <div class="page-h"><a class="back" href="#/clinica/${c.id}">← ${esc(c.name)}</a><button class="btn primary" data-act="propNew" data-c="${c.id}">+ Nova proposta</button></div>
       <section class="card"><header><h3>Propostas de ${esc(c.name)}</h3></header>
         ${list.length ? `<ul class="tlist">${list.map((x) => { const t = propTotals(x); return `<li class="trow"><a class="trow-b" href="#/proposta/${c.id}/${x.id}">
-          <span class="trow-t">${esc(x.title || 'Proposta')} · ${fmtDate(x.date)}</span><span class="trow-s">${x.status === 'enviada' ? 'Enviada' : 'Rascunho'} · 1º mês ${money(t.first)} · válida até ${fmtDate(x.validUntil)}</span></a>
+          <span class="trow-t">${esc(x.title || 'Proposta')} · ${fmtDate(x.date)}</span><span class="trow-s">${{ enviada: 'Enviada', aceita: '✓ Aceita' }[x.status] || 'Rascunho'} · 1º mês ${money(t.first)} · válida até ${fmtDate(x.validUntil)}</span></a>
           <button class="btn sm" data-act="propDup" data-c="${c.id}" data-id="${x.id}">Duplicar</button></li>`; }).join('')}</ul>` : empty('Nenhuma proposta ainda. Crie a primeira.')}
       </section>`;
     return;
@@ -753,13 +755,13 @@ VIEWS.proposta = () => {
   const ta = (k, label, ph) => `<label class="full"><span>${label}</span><textarea data-pf="${k}" rows="2" placeholder="${ph}">${esc(p[k] || '')}</textarea></label>`;
   view().innerHTML = `
     <div class="noprint page-h"><a class="back" href="#/proposta/${c.id}">← Propostas de ${esc(c.name)}</a>
-      <div class="btns"><button class="btn sm" data-act="propDup" data-c="${c.id}" data-id="${p.id}">Duplicar</button><button class="btn sm danger" data-act="propDel" data-c="${c.id}" data-id="${p.id}">Excluir</button><button class="btn primary" data-act="propPrint" data-c="${c.id}" data-id="${p.id}">Gerar PDF</button></div></div>
+      <div class="btns">${p.status === 'aceita' ? `<span class="pill st-concluido">Aceita em ${fmtDate((p.acceptedAt || '').slice(0, 10) || todayStr())}</span>` : `<button class="btn sm ok" data-act="propAccept" data-c="${c.id}" data-id="${p.id}">✓ Proposta aceita</button>`}<button class="btn sm" data-act="propDup" data-c="${c.id}" data-id="${p.id}">Duplicar</button><button class="btn sm danger" data-act="propDel" data-c="${c.id}" data-id="${p.id}">Excluir</button><button class="btn primary" data-act="propPrint" data-c="${c.id}" data-id="${p.id}">Gerar PDF</button></div></div>
     <div class="seg prop-tabs noprint"><button aria-selected="${ui.propTab !== 'previa'}" data-act="propTab" data-t="editar">Editar</button><button aria-selected="${ui.propTab === 'previa'}" data-act="propTab" data-t="previa">Prévia</button></div>
     <div class="prop-wrap tab-${ui.propTab === 'previa' ? 'previa' : 'editar'}">
       <form class="mform prop-form noprint card" onsubmit="return false">
         <h3 class="full">Dados da proposta <small class="muted" id="propSaved">salvo automaticamente</small></h3>
         ${f('title', 'Nome do rascunho')}
-        <label><span>Situação</span><select data-pf="status">${opt([['rascunho', 'Rascunho'], ['enviada', 'Enviada']], p.status)}</select></label>
+        <label><span>Situação</span><select data-pf="status">${opt([['rascunho', 'Rascunho'], ['enviada', 'Enviada'], ['aceita', 'Aceita']], p.status)}</select></label>
         ${f('responsible', 'Responsável na clínica')}
         ${f('date', 'Data', 'date')}
         ${f('validUntil', 'Validade', 'date')}
@@ -891,7 +893,8 @@ function renderPanel() {
       <ul class="cl">${t.checklist.map((i, k) => `<li><label><input type="checkbox" data-act="chk" data-i="${k}" ${i.done ? 'checked' : ''}> <span>${esc(i.t)}</span></label><button class="x" data-act="chkDel" data-i="${k}" aria-label="Remover item">×</button></li>`).join('')}</ul>
       <form class="addrow" data-form="chkAdd"><input name="t" placeholder="Adicionar item…" aria-label="Novo item do checklist"><button class="btn sm">+</button></form>
       <label class="full"><span>Evidência (link, arquivo, resumo)</span><textarea data-tf="evidence" rows="2">${esc(t.evidence)}</textarea></label>
-      <label class="full"><span>${t.meeting ? 'Pauta, ata, decisões e presença' : 'Observações / comentários'}</span><textarea data-tf="notes" rows="${t.meeting ? 6 : 3}">${esc(t.notes)}</textarea></label>
+      ${t.meeting && !(t.notes || '').trim() ? `<button class="btn sm" data-act="insertAgenda" style="margin-top:12px">Inserir pauta padrão</button>` : ''}
+      <label class="full"><span>${t.meeting ? 'Pauta, ata, decisões e presença' : 'Observações / comentários'}</span><textarea data-tf="notes" rows="${t.meeting ? 14 : 3}">${esc(t.notes)}</textarea></label>
       <h4>Histórico</h4><ul class="log sm">${t.history.slice(0, 30).map(logItem).join('')}</ul>
       ${t.custom ? `<button class="btn danger sm" data-act="delTask" data-id="${t.id}">Excluir tarefa</button>` : ''}`;
   } else if (p.type === 'month') {
@@ -998,6 +1001,24 @@ function onRemoteApplied() {
   if (!busyForm) { const y = $('.main').scrollTop; render(); $('.main').scrollTop = y; }
   toast('Dados atualizados de outro aparelho');
 }
+// ---------- busca geral ----------
+function openSearch() {
+  const o = $('#search'); o.hidden = false; const i = $('#searchInput'); i.value = ''; renderSearch(''); setTimeout(() => i.focus(), 30);
+}
+function closeSearch() { $('#search').hidden = true; }
+function renderSearch(q) {
+  const box = $('#searchResults'); q = q.trim().toLowerCase();
+  if (q.length < 2) { box.innerHTML = `<p class="hint s-hint">Digite o nome de uma clínica, tarefa ou proposta.</p>`; return; }
+  const has = (v) => (v || '').toLowerCase().includes(q);
+  const cl = S.clinics.filter((c) => has(c.name) || has(c.city) || has(c.contact)).slice(0, 5);
+  const tk = S.tasks.filter((t) => has(t.title) && clinicById(t.clinicId)).sort((a, b) => (a.status === 'concluido') - (b.status === 'concluido') || a.due.localeCompare(b.due)).slice(0, 8);
+  const pr = []; S.clinics.forEach((c) => (c.proposals || []).forEach((p) => { if (has(p.title) || has(c.name) && q.length > 2 || has(p.procedure) || has(p.objective)) pr.push([c, p]); }));
+  const sec = (t, items) => items.length ? `<h5>${t}</h5>${items.join('')}` : '';
+  const html = sec('Clínicas', cl.map((c) => `<a class="s-item" href="#/clinica/${c.id}" data-s="1">${icon('clinicas')}<span><b>${esc(c.name)}</b><small>${esc([segLabel(c.segment), c.city, stageLabel(c.stage)].filter(Boolean).join(' · '))}</small></span></a>`))
+    + sec('Tarefas', tk.map((t) => { const s2 = taskStatusLabel(t); return `<button class="s-item" data-act="task" data-id="${t.id}" data-s="1">${icon('tarefas')}<span><b>${esc(t.title)}</b><small>${esc(clinicById(t.clinicId).name)} · Mês ${t.month} · Dia ${dayOf(t)} · ${s2.l}</small></span></button>`; }))
+    + sec('Propostas', pr.slice(0, 5).map(([c, p]) => `<a class="s-item" href="#/proposta/${c.id}/${p.id}" data-s="1">${icon('financeiro')}<span><b>${esc(p.title || 'Proposta')} — ${esc(c.name)}</b><small>${fmtDate(p.date)} · ${{ enviada: 'Enviada', aceita: 'Aceita' }[p.status] || 'Rascunho'}</small></span></a>`));
+  box.innerHTML = html || `<p class="hint s-hint">Nada encontrado para “${esc(q)}”.</p>`;
+}
 function isDark() { const t = S.settings.theme; return t === 'dark' || (t === 'auto' && matchMedia('(prefers-color-scheme: dark)').matches); }
 function applyTheme() {
   const t = S.settings.theme; const root = document.documentElement;
@@ -1033,6 +1054,20 @@ document.addEventListener('click', (e) => {
     propNew: () => { const c = clinicById(d.c); c.proposals = c.proposals || []; const p = newProposal(c); c.proposals.push(p); log(`Criou proposta para ${c.name}`, c.id); saveNow(); ui.propTab = 'editar'; go(`#/proposta/${c.id}/${p.id}`); },
     propDup: () => { const c = clinicById(d.c); const o = c.proposals.find((x) => x.id === d.id); const p = { ...JSON.parse(JSON.stringify(o)), id: uid(), title: (o.title || 'Proposta') + ' (cópia)', date: todayStr(), validUntil: addDays(todayStr(), 10), status: 'rascunho', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() }; c.proposals.push(p); log(`Duplicou proposta de ${c.name}`, c.id); saveNow(); toast('Proposta duplicada'); go(`#/proposta/${c.id}/${p.id}`); },
     propDel: () => { const c = clinicById(d.c); if (!confirm('Excluir esta proposta?')) return; c.proposals = c.proposals.filter((x) => x.id !== d.id); saveNow(); go(`#/proposta/${c.id}`); },
+    propAccept: () => {
+      const c = clinicById(d.c); const p = c.proposals.find((x) => x.id === d.id);
+      const willStart = !c.journey;
+      if (!confirm(`Marcar a proposta como ACEITA?\n\n• ${c.name} passa para Onboarding\n• Valores, implantação e verba da proposta vão para a ficha\n${willStart ? `• A jornada MBCR de 12 meses começa em ${fmtDate(p.startDate)}` : '• A jornada já existe e será mantida como está'}`)) return;
+      p.status = 'aceita'; p.acceptedAt = new Date().toISOString(); p.updatedAt = p.acceptedAt;
+      Object.assign(c, { price: p.price ?? c.price, setupFee: p.setupFee ?? c.setupFee, setupWaived: !!p.setupWaived, setupReason: p.setupReason || '', mediaBudget: p.media ?? c.mediaBudget, contact: p.responsible || c.contact });
+      if (!c.goal && p.objective) c.goal = p.objective;
+      if (['lead', 'proposta', 'negociacao'].includes(c.stage)) c.stage = 'onboarding';
+      if (willStart) { c.startDate = p.startDate || todayStr(); startJourney(c); }
+      log(`Proposta aceita — ${c.name}${willStart ? ' (jornada iniciada)' : ''}`, c.id); saveNow();
+      toast(willStart ? 'Cliente ativado e jornada criada' : 'Proposta marcada como aceita');
+      ui.clinicTab = 'hoje'; ui.lastClinic = c.id; go('#/clinica/' + c.id);
+    },
+    insertAgenda: () => { const t = taskById(ui.panel.id); setTask(t, 'notes', agendaFor(t.title)); rerender(); },
     propTab: () => { ui.propTab = d.t; $('.prop-wrap').className = 'prop-wrap tab-' + d.t; $$('.prop-tabs button').forEach((b) => b.setAttribute('aria-selected', b.dataset.t === d.t)); },
     propPrint: () => { const c = clinicById(d.c); const p = c.proposals.find((x) => x.id === d.id); const old = document.title; document.title = propFileName(c, p); const back = () => { document.title = old; removeEventListener('afterprint', back); }; addEventListener('afterprint', back); log(`Gerou PDF da proposta de ${c.name}`, c.id); save(); window.print(); setTimeout(back, 3000); },
     openToday: () => { ui.clinicTab = 'hoje'; ui.lastClinic = d.id; },
@@ -1147,9 +1182,31 @@ document.addEventListener('drop', (e) => { const col = e.target.closest('[data-d
 
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && ui.panel && !$('#modal').open) closePanel(); });
 
+// ================= arrastar para concluir (celular) =================
+(() => {
+  let row = null, x0 = 0, y0 = 0, dx = 0, active = false;
+  document.addEventListener('touchstart', (e) => {
+    const r = e.target.closest('.trow, .sel-wrap'); if (!r || !r.querySelector('[data-act="done"]') || e.target.closest('select, input, textarea')) { row = null; return; }
+    row = r; x0 = e.touches[0].clientX; y0 = e.touches[0].clientY; dx = 0; active = false;
+  }, { passive: true });
+  document.addEventListener('touchmove', (e) => {
+    if (!row) return; const t = e.touches[0]; const mx = t.clientX - x0, my = t.clientY - y0;
+    if (!active) { if (Math.abs(mx) > 14 && Math.abs(mx) > Math.abs(my) * 1.4) active = true; else if (Math.abs(my) > 12) { row = null; return; } else return; }
+    dx = Math.max(-40, Math.min(140, mx)); row.classList.add('swiping'); row.style.transform = `translateX(${dx}px)`;
+    row.classList.toggle('swipe-go', dx > 90);
+  }, { passive: true });
+  const end = () => {
+    if (!row) return; const r = row; row = null;
+    r.style.transform = ''; r.classList.remove('swiping', 'swipe-go');
+    if (active && dx > 90) { const b = r.querySelector('[data-act="done"]'); if (b) { r.dataset.noclick = '1'; toggleDone(b.dataset.id); try { navigator.vibrate && navigator.vibrate(12); } catch (err) {} } }
+    active = false;
+  };
+  document.addEventListener('touchend', end); document.addEventListener('touchcancel', end);
+})();
+
 // ================= início =================
 function boot() {
-  initStore(); applyTheme();
+  initStore(); if (fillAgendas()) saveNow(); applyTheme();
   $('#nav').innerHTML = NAV.map(([k, l]) => `<a href="#/${k}" data-nav="${k}" title="${l}">${icon(k)}<span>${l}</span></a>`).join('');
   const bottom = ['visao', 'mapa', 'clinicas', 'tarefas'];
   const short = { visao: 'Início', mapa: 'Mapa', clinicas: 'Clínicas', tarefas: 'Tarefas' };
@@ -1161,6 +1218,12 @@ function boot() {
   $('#scrim').addEventListener('click', closePanel);
   $('#modal').addEventListener('click', (e) => { if (e.target.id === 'modal') closeModal(); });
   $('#quickAdd').addEventListener('click', () => clinicForm());
+  $('#searchBtn').innerHTML = icon('search');
+  $('#searchBtn').addEventListener('click', openSearch);
+  $('#search').addEventListener('click', (e) => { if (e.target.id === 'search' || e.target.closest('[data-s]')) setTimeout(closeSearch, 0); });
+  $('#searchInput').addEventListener('input', (e) => renderSearch(e.target.value));
+  $('#searchInput').addEventListener('keydown', (e) => { if (e.key === 'Escape') closeSearch(); if (e.key === 'Enter') { const f = $('#searchResults [data-s]'); if (f) f.click(); } });
+  document.addEventListener('keydown', (e) => { const typing = ['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement.tagName); if ((e.key === '/' && !typing) || ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k')) { e.preventDefault(); openSearch(); } });
   $('#themeBtn').addEventListener('click', () => { S.settings.theme = isDark() ? 'light' : 'dark'; applyTheme(); save(); if (route.name === 'config') render(); });
   matchMedia('(prefers-color-scheme: dark)').addEventListener?.('change', applyTheme);
   applyTheme();

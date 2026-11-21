@@ -869,3 +869,27 @@ select { text-overflow: ellipsis; }
 .pres-pillars b, .mnum, .tl-item.st-concluido .tl-node { background: color-mix(in srgb, var(--pc, #003cd5) 72%, #000) !important; color: #fff; }
 .pm-dots button { color: var(--ink); }
 .report small, .report .hint, .report .tbl th { color: #5b6478; }
+
+/* proposta aceita */
+.btn.ok { color: var(--ok); border-color: color-mix(in srgb, var(--ok) 45%, transparent); }
+.btn.ok:hover { background: color-mix(in srgb, var(--ok) 10%, transparent); }
+
+/* busca geral */
+.search { position: fixed; inset: 0; z-index: 70; background: rgba(2, 4, 12, .5); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); display: flex; justify-content: center; align-items: flex-start; padding: 10vh 16px 16px; }
+.search[hidden] { display: none; }
+.s-box { width: min(620px, 100%); background: var(--card); border: 1px solid var(--line); border-radius: 18px; box-shadow: 0 30px 80px rgba(0,0,0,.35); overflow: hidden; }
+.s-in { padding: 12px; border-bottom: 1px solid var(--line); } .s-in input { width: 100%; font-size: 16px; border: 0 !important; background: var(--bg2) !important; }
+.s-res { max-height: 60vh; overflow-y: auto; padding: 6px 8px 10px; }
+.s-res h5 { margin: 12px 8px 4px; font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+.s-item { display: flex; gap: 12px; align-items: center; width: 100%; text-align: left; border: 0; background: none; padding: 10px; border-radius: 12px; cursor: pointer; color: var(--ink); }
+.s-item:hover, .s-item:focus-visible { background: var(--bg2); }
+.s-item .ic { color: var(--muted); } .s-item span { display: flex; flex-direction: column; min-width: 0; } .s-item small { font-size: 12.5px; }
+.s-hint { padding: 10px; margin: 0; }
+@media (max-width: 760px) { .search { padding-top: calc(12px + env(safe-area-inset-top)); } #searchBtn { width: 40px; } }
+
+/* arrastar para concluir */
+.tlist li { position: relative; transition: transform .2s ease; }
+.tlist li.swiping { transition: none; background: color-mix(in srgb, var(--ok) 8%, var(--card)); border-radius: 12px; }
+.tlist li.swipe-go { background: color-mix(in srgb, var(--ok) 22%, var(--card)); }
+.swipe-hint { display: none; margin: -4px 0 12px; }
+@media (pointer: coarse) and (max-width: 760px) { .swipe-hint { display: block; } }

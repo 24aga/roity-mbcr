@@ -25,6 +25,7 @@
       <header class="top">
         <div class="brand-m"><span class="logo"><img src="icons/symbol-white.png" alt="ROITY"></span></div>
         <h1 id="topTitle">Visão geral</h1>
+        <button class="theme-btn" id="searchBtn" aria-label="Buscar (atalho /)" title="Buscar (/)"></button>
         <a class="sync-b" id="syncBadge" href="#/config" aria-label="Sincronização"></a>
         <button class="theme-btn" id="themeBtn" aria-label="Alternar modo claro/escuro"></button>
         <button class="btn primary sm" id="quickAdd">+ Clínica</button>
@@ -40,6 +41,7 @@
     <div id="panelBody"></div>
   </aside>
   <dialog id="modal"><div id="modalBody"></div></dialog>
+  <div id="search" class="search" hidden><div class="s-box" role="dialog" aria-label="Buscar"><div class="s-in"><input id="searchInput" type="search" placeholder="Buscar clínica, tarefa ou proposta" autocomplete="off"></div><div id="searchResults" class="s-res"></div></div></div>
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
   <script src="js/template.js"></script>
   <script src="js/howto.js"></script>
