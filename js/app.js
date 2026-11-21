@@ -824,7 +824,7 @@ VIEWS.config = () => {
         : `<p>Hoje os dados ficam só neste aparelho. Conecte <b>uma vez em cada aparelho</b> para o PC e o celular mostrarem sempre a mesma coisa. Os dados ficam no seu repositório <b>privado</b> do GitHub (${esc(SYNC_DEFAULT.repo)}).</p>
           <div class="sync-steps">
             <div class="ss"><span>1</span><div><b>Crie a chave no GitHub</b><p>O botão abre a página já preenchida. Entre na sua conta do GitHub se ele pedir.</p>
-              <a class="btn primary" href="https://github.com/settings/personal-access-tokens/new?name=Roity+MBCR&description=Sincronizacao+do+app+Roity+MBCR&expires_in=none&contents=write" target="_blank" rel="noopener">Abrir GitHub</a></div></div>
+              <a class="btn primary" href="https://github.com/settings/personal-access-tokens/new?name=Roity+MBCR+${Date.now().toString(36).slice(-4)}&description=Sincronizacao+do+app+Roity+MBCR&expires_in=none&contents=write" target="_blank" rel="noopener">Abrir GitHub</a></div></div>
             <div class="ss"><span>2</span><div><b>Escolha o repositório</b><p>Na página, em <b>Repository access</b>, marque <b>Only select repositories</b> e escolha <b>roity-mbcr-dados</b>. O resto já vem certo.</p></div></div>
             <div class="ss"><span>3</span><div><b>Gere e copie</b><p>Desça até o fim e toque em <b>Generate token</b> (e confirme). Depois toque no ícone de copiar ao lado do código que começa com <b>github_pat_</b>.</p></div></div>
             <div class="ss"><span>4</span><div><b>Cole aqui e conecte</b>
