@@ -1107,3 +1107,31 @@ details.card > summary { cursor: pointer; }
   .ufc { flex: 1; min-width: 0; }
 }
 @media (max-width: 760px) { .cm3 { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; } .cm3 .kpi { padding: 10px 8px; } .cm3 .kpi span { font-size: 11px; } .cm3 .kpi b { font-size: 20px; } }
+
+/* resultados, financeiro, bloqueio */
+.hello-row { display: flex; justify-content: space-between; align-items: flex-end; gap: 12px; flex-wrap: wrap; }
+.res-top { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; }
+.goal { margin-bottom: 14px; } .goal-h { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 6px; font-size: 14px; }
+.goal-h span { display: flex; align-items: center; gap: 6px; color: var(--ink2); } .goal-in { width: 120px; min-height: 34px !important; padding: 4px 8px !important; }
+.goal small { color: var(--muted); font-size: 12.5px; } .bar.ok i { background: var(--ok); }
+.k4g { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.tbl tr.sel td { background: var(--accent-soft); }
+.okc { color: var(--ok); }
+.pay { display: grid; grid-template-columns: minmax(0, 1fr) auto auto auto; align-items: center; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--line); }
+.pay-n { display: flex; flex-direction: column; min-width: 0; } .pay-n small { color: var(--muted); font-size: 12.5px; } .pay-v { font-family: var(--font-d); }
+.linkrow { display: flex; gap: 6px; align-items: center; } .linkrow input { flex: 1; min-width: 0; }
+.r-goals { grid-template-columns: repeat(3, 1fr); } .r-goals small { font-size: 11px; color: #5b6478; }
+.r-chart { display: flex; align-items: flex-end; gap: 8px; height: 140px; padding: 8px 0; border-bottom: 1px solid #e1e6f1; }
+.r-chart div { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 100%; gap: 4px; }
+.r-chart i { width: 100%; background: #003cd5; border-radius: 6px 6px 2px 2px; } .r-chart small { font-size: 11px; }
+@media print { .r-chart i { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
+.lock { position: fixed; inset: 0; z-index: 200; display: grid; place-items: center; background: radial-gradient(600px 400px at 0% 0%, rgba(0,60,213,.5), transparent 65%), #010103; padding: 20px; }
+.lock-box { display: flex; flex-direction: column; align-items: center; gap: 12px; width: min(320px, 100%); color: #fff; }
+.lock-logo { height: 64px; } .lock-box h2 { font-size: 20px; } .lock-box input { width: 100%; text-align: center; font-size: 24px !important; letter-spacing: .4em; background: #0b1124 !important; color: #fff; border-color: #263461 !important; }
+.lock-box .btn { width: 100%; } .lock-err { color: #ff8a80; margin: 0; }
+@media (max-width: 760px) {
+  .k4g { grid-template-columns: 1fr 1fr; }
+  .pay { grid-template-columns: minmax(0, 1fr) auto; } .pay .pill { justify-self: start; } .pay .btn { justify-self: end; }
+  .hello-row .seg { width: 100%; } .hello-row .seg button { flex: 1; }
+}
+.cal-h h2 { text-transform: none; }

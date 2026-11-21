@@ -50,7 +50,7 @@ function defaultState() {
       goals: { calls: 30, convos: 5, pres: 1 },
     },
     daily: {},
-    clinics: [], tasks: [], creatives: [], metrics: [], log: [],
+    clinics: [], tasks: [], creatives: [], metrics: [], payments: [], cityOwner: {}, log: [],
   };
 }
 

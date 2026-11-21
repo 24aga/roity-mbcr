@@ -86,7 +86,7 @@ function setTask(t, field, value) {
   const old = t[field];
   if (old === value) return;
   t[field] = value;
-  const labels = { status: 'status', owner: 'responsável', due: 'prazo', priority: 'prioridade', title: 'título', evidence: 'evidência', notes: 'observações' };
+  const labels = { link: 'link do arquivo', status: 'status', owner: 'responsável', due: 'prazo', priority: 'prioridade', title: 'título', evidence: 'evidência', notes: 'observações' };
   let what = `${labels[field] || field}: ${field === 'status' ? statusName(old) + ' → ' + statusName(value) : value}`;
   if (field === 'status') t.doneAt = value === 'concluido' ? todayStr() : null;
   if (field === 'evidence' || field === 'notes') what = `atualizou ${labels[field]}`;
@@ -113,11 +113,11 @@ function dayOf(t) { const c = clinicById(t.clinicId); return c ? diffDays(monthS
 function overallFor(clinic) { return clinic ? groupState(S.tasks.filter((t) => t.clinicId === clinic.id)) : null; }
 
 // ================= plano do dia =================
-function todayPlan(c) {
+function todayPlan(c, owner) {
   const today = todayStr(); const n = currentMonth(c);
   const inJourney = n >= 1 && n <= 12;
   const dayN = inJourney ? diffDays(monthStart(c, n), today) + 1 : null;
-  const open = S.tasks.filter((t) => t.clinicId === c.id && t.status !== 'concluido').sort((a, b) => a.due.localeCompare(b.due) || (a.kind === 'novo' ? -1 : 1));
+  const open = S.tasks.filter((t) => t.clinicId === c.id && t.status !== 'concluido' && (!owner || t.owner === owner)).sort((a, b) => a.due.localeCompare(b.due) || (a.kind === 'novo' ? -1 : 1));
   const d2 = addDays(today, 2), d6 = addDays(today, 6);
   return {
     today, n, dayN, inJourney,
@@ -136,7 +136,7 @@ function dayHeader(c, p) {
   return `Mês ${p.n} · Dia ${p.dayN} — ${esc(c.journey.template[p.n - 1].short)}`;
 }
 function todayHTML(c, compact) {
-  const p = todayPlan(c);
+  const p = todayPlan(c, compact ? ui.vOwner : null);
   const now = [...p.late, ...p.hoje, ...p.comecar];
   const grp = (title, list, cls, how) => list.length ? `<h4 class="dg ${cls}">${title} <small>${list.length}</small></h4><ul class="tlist">${list.map((t) => taskRow(t, { day: true, how })).join('')}</ul>` : '';
   if (compact) {
@@ -264,7 +264,8 @@ VIEWS.visao = () => {
   const active = S.clinics.filter((c) => c.stage === 'ativo');
   const onb = S.clinics.filter((c) => c.stage === 'onboarding');
   const mrr = S.clinics.filter((c) => ['ativo', 'onboarding'].includes(c.stage)).reduce((a, c) => a + (+c.price || 0), 0);
-  const open = S.tasks.filter((t) => t.status !== 'concluido' && clinicById(t.clinicId));
+  const vo = ui.vOwner || '';
+  const open = S.tasks.filter((t) => t.status !== 'concluido' && clinicById(t.clinicId) && (!vo || t.owner === vo));
   const overdue = open.filter((t) => taskOverdue(t));
   const todayT = open.filter((t) => t.due === today);
   const meetings = open.filter((t) => t.meeting && t.due >= today && t.due <= wEnd);
@@ -286,7 +287,8 @@ VIEWS.visao = () => {
     ${hasDemo ? `<div class="notice demo-n"><span>Você está vendo <b>dados de demonstração</b> (marcados DEMO).</span><button class="btn sm danger" data-act="clearDemo">Apagar clínicas DEMO</button></div>` : ''}
     ${(() => { const real = S.clinics.some((c) => !c.demo); const lb = S.settings.lastBackup; const days = lb ? diffDays(lb, today) : null;
       return real && !Sync.enabled() && (days == null || days >= 7) ? `<div class="notice warn demo-n"><span>💾 ${days == null ? 'Você ainda não fez nenhum backup.' : `Último backup há ${days} dias.`} Seus dados ficam só neste aparelho.</span><button class="btn sm primary" data-act="exportJSON">Baixar backup agora</button></div>` : ''; })()}
-    <div class="hello"><small>${fmtDate(today, { weekday: 'long', day: '2-digit', month: 'long' })}</small><h2>${hello}, ${esc(S.me)}.</h2></div>
+    <div class="hello hello-row"><div><small>${fmtDate(today, { weekday: 'long', day: '2-digit', month: 'long' })}</small><h2>${hello}, ${esc(S.me)}.</h2></div>
+      <div class="seg" aria-label="Ver tarefas de">${[['', 'Todos'], ['Tiago', 'Tiago'], ['Micaela', 'Micaela']].map(([k, l]) => `<button aria-selected="${vo === k}" data-act="vOwner" data-o="${k}">${l}</button>`).join('')}</div></div>
     ${(() => {
       const nowN = overdue.length + todayT.length;
       const soonN = open.filter((t) => t.due > today && t.due <= addDays(today, 2)).length;
@@ -313,7 +315,7 @@ VIEWS.visao = () => {
     ${weekClinics.length ? `<div class="wk">${weekClinics.map(({ c, n, tasks, st }) => `
       <section class="card wkc">
         <header><div><h3><a href="#/clinica/${c.id}" data-act="openToday" data-id="${c.id}">${esc(c.name)}</a>${demoBadge(c)}</h3>
-          <small>${dayHeader(c, todayPlan(c))}</small></div>
+          <small>${dayHeader(c, todayPlan(c))}${(() => { const gp = goalPct(c, Math.min(12, Math.max(1, currentMonth(c)))); return gp == null ? '' : ` · <b class="${gp >= 1 ? 'okc' : ''}">${Math.round(gp * 100)}% da meta</b>`; })()}</small></div>
           <a class="btn sm" href="#/mapa/${c.id}" data-act="openMap" data-id="${c.id}">Mapa</a></header>
         ${st ? `<div class="wk-p"><div class="bar"><i style="width:${st.p * 100}%"></i></div><span>${Math.round(st.p * 100)}% do mês</span></div>` : ''}
         ${todayHTML(c, true)}
@@ -489,7 +491,7 @@ VIEWS.clinicas = () => {
 VIEWS.clinica = () => {
   const c = clinicById(route.params[0]);
   if (!c) { view().innerHTML = empty('Clínica não encontrada.'); return; }
-  const tabs = [['hoje', 'Hoje'], ['resumo', 'Resumo'], ['jornada', 'Jornada'], ['tarefas', 'Tarefas'], ['contrato', 'Contrato e garantia'], ['historico', 'Histórico']];
+  const tabs = [['hoje', 'Hoje'], ['resultados', 'Resultados'], ['resumo', 'Resumo'], ['jornada', 'Jornada'], ['tarefas', 'Tarefas'], ['contrato', 'Contrato e garantia'], ['historico', 'Histórico']];
   const st = c.journey ? overallFor(c) : null; const n = currentMonth(c);
   let body = '';
   const oldR = c.journey && c.journey.routinesV !== 2 ? `<div class="notice demo-n"><span>Esta clínica ainda está com as rotinas antigas. Atualize para receber o ciclo de campanha e conteúdo e as rotinas de segunda.</span><button class="btn sm primary" data-act="refreshOne" data-id="${c.id}">Atualizar rotinas</button></div>` : '';
@@ -521,6 +523,8 @@ VIEWS.clinica = () => {
       </section>
       <section class="card"><header><h3>Próximas entregas</h3><button class="btn sm" data-act="clinicTab" data-t="tarefas">Ver todas</button></header>${(() => { const l = S.tasks.filter((t) => t.clinicId === c.id && t.status !== 'concluido').sort((a, b) => a.due.localeCompare(b.due)).slice(0, 6); return l.length ? `<ul class="tlist">${l.map((t) => taskRow(t, { day: true })).join('')}</ul>` : empty('Nenhuma entrega pendente.'); })()}</section>
     </div>`;
+  } else if (ui.clinicTab === 'resultados') {
+    body = resultsTab(c);
   } else if (ui.clinicTab === 'jornada') {
     body = c.journey ? `<div class="mgrid">${MONTHS.map((m) => { const md = monthData(c, m.n); return `<button class="mcell st-${md.state.k} ${md.isCurrent ? 'current' : ''}" data-act="month" data-c="${c.id}" data-n="${m.n}" style="--pc:${PILLARS[md.pillars[0]].color}">
       <small>MÊS ${m.n} · ${fmtShort(monthStart(c, m.n))}</small><b>${esc(md.short)}</b><div class="bar sm"><i style="width:${md.state.p * 100}%"></i></div><span>${md.state.l} · ${md.state.done}/${md.state.total}</span></button>`; }).join('')}</div>` : empty('Jornada não iniciada.');
@@ -607,7 +611,7 @@ VIEWS.calendario = () => {
     cells += `<button class="cd ${ds === today ? 'today' : ''} ${ds === sel ? 'sel' : ''}" data-act="calDay" data-d="${ds}" aria-label="${fmtDate(ds)}: ${l.length} itens">
       <span class="dn">${d}</span>${l.length ? `<span class="cd-c">${meet ? `<i class="m">${meet} reun.</i>` : ''}<i>${l.length - meet} tarefa${l.length - meet === 1 ? '' : 's'}</i>${late ? '<i class="late">!</i>' : ''}</span>` : ''}</button>`;
   }
-  const monthName = first.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+  const monthName = ((x) => x.charAt(0).toUpperCase() + x.slice(1))(first.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' }));
   const selList = (byDay[sel] || []).sort((a, b) => b.meeting - a.meeting);
   view().innerHTML = `
     <div class="cal-h"><button class="btn sm" data-act="calNav" data-d="-1" aria-label="Mês anterior">←</button><h2>${monthName}</h2><button class="btn sm" data-act="calNav" data-d="1" aria-label="Próximo mês">→</button>
@@ -640,6 +644,7 @@ VIEWS.criativos = () => {
       <input data-act="crf" data-id="${x.id}" data-f="procedure" placeholder="Procedimento" value="${esc(x.procedure)}" aria-label="Procedimento">
       <select data-act="crf" data-id="${x.id}" data-f="status" aria-label="Status">${opt(CREATIVE_STATUS, x.status)}</select>
       <div class="cr-rev"><span>Revisões: <b>${x.reviews}</b>/${S.settings.reviewLimit}</span><button class="btn sm ghost" data-act="crRev" data-id="${x.id}">+1 revisão</button></div>
+      <span class="linkrow"><input data-act="crf" data-id="${x.id}" data-f="link" placeholder="Link do arquivo (Drive)" value="${esc(x.link || '')}" aria-label="Link do arquivo">${x.link ? `<button class="btn sm" data-act="openLink" data-v="${esc(x.link)}">Abrir</button>` : ''}</span>
       <textarea data-act="crf" data-id="${x.id}" data-f="notes" placeholder="Roteiro, orientação de gravação, link do arquivo…" rows="3" aria-label="Notas">${esc(x.notes)}</textarea>
     </article>`).join('')}</div>
     <section class="card"><header><h3>Campanhas e experimentos</h3><button class="btn sm" data-act="newCamp" data-c="${c.id}">+ Registro</button></header>
@@ -649,6 +654,8 @@ VIEWS.criativos = () => {
 
 // ---------- Relatório (imprimir/PDF) ----------
 VIEWS.relatorio = () => {
+  const per = { s1: [1, 6, 'Relatório semestral'], s2: [7, 12, 'Relatório do 2º semestre'], ano: [1, 12, 'Relatório anual'] }[route.params[1]];
+  if (per) { const cc = clinicById(route.params[0]); if (!cc || !cc.journey) { view().innerHTML = empty('Relatório indisponível.'); return; } return periodReport(cc, per[0], per[1], per[2]); }
   const c = clinicById(route.params[0]); const n = +route.params[1];
   if (!c || !c.journey) { view().innerHTML = empty('Relatório indisponível.'); return; }
   const md = monthData(c, n);
@@ -668,9 +675,10 @@ VIEWS.relatorio = () => {
         <p class="${approved ? 'r-ok' : 'draft'}">${approved ? `Revisado e aprovado por ${esc(approved.who)} em ${fmtDate(approved.at.slice(0, 10))}` : 'RASCUNHO — aguardando revisão de Tiago antes do envio'}</p>
         <div class="r-stats"><div class="hero"><span>ENTREGAS CONCLUÍDAS</span><b>${done.length}/${md.tasks.length}</b></div><div><span>PERÍODO</span><b>${fmtShort(monthStart(c, n))} – ${fmtShort(monthEnd(c, n))}</b></div><div><span>MÊS DA JORNADA</span><b>${n} de 12</b></div></div>
         <h2><span class="r-badge">01</span>Foco do mês</h2><p>${esc(md.desc)}</p>
-        <h2><span class="r-badge">02</span>O que entregamos</h2><ol>${done.map((t) => `<li><b>${esc(clientTitle(t.title))}</b>${t.evidence ? ` — ${esc(t.evidence)}` : ''}</li>`).join('') || '<li>—</li>'}</ol>
+        <h2><span class="r-badge">02</span>Resultados do mês</h2>${metricsBlock(c, n)}
+        <h2><span class="r-badge">03</span>O que entregamos</h2><ol>${done.map((t) => `<li><b>${esc(clientTitle(t.title))}</b>${t.evidence ? ` — ${esc(t.evidence)}` : ''}</li>`).join('') || '<li>—</li>'}</ol>
         ${pend.length ? `<div class="r-alert"><b>PENDÊNCIAS</b><ul>${pend.map((t) => `<li>${esc(clientTitle(t.title))} <small>(${t.owner === 'Clínica' ? 'depende da clínica' : statusName(t.status)})</small></li>`).join('')}</ul></div>` : ''}
-        <h2><span class="r-badge">03</span>Próximos passos</h2>
+        <h2><span class="r-badge">04</span>Próximos passos</h2>
         ${next ? `<p><b>Mês ${n + 1}: ${esc(next.title)}</b></p><ol>${next.novo.map((t) => `<li>${esc(clientTitle(t.title))}</li>`).join('')}</ol>` : '<p>Plano do próximo ciclo e proposta de renovação.</p>'}
         <footer class="r-foot"><span><b>${esc(c.name).toUpperCase()}</b> · RELATÓRIO MENSAL</span><span>ROITY · MÉTODO MBCR</span></footer>
       </div>
@@ -960,6 +968,8 @@ VIEWS.config = () => {
           <label><span>Horas/dia de operação — Tiago</span><input type="number" step="0.5" name="capT" value="${st.capacity.Tiago}"></label>
           <label><span>Horas/dia de operação — Micaela</span><input type="number" step="0.5" name="capM" value="${st.capacity.Micaela}"></label>
           <label><span>Dias úteis/mês</span><input type="number" name="workDays" value="${st.workDays}"></label>
+          <label><span>Custo da sua hora (R$)</span><input type="number" step="1" name="hourCost" value="${st.hourCost ?? ''}" placeholder="para calcular a margem"></label>
+          <label><span>Ferramentas por cliente/mês (R$)</span><input type="number" step="1" name="toolsCost" value="${st.toolsCost ?? ''}" placeholder="ex.: 24AGÁ, editor"></label>
           <label><span>Horas por criativo</span><input type="number" step="0.05" name="hoursPerCreative" value="${st.hoursPerCreative}"></label>
           <label><span>Limite de revisões por criativo</span><input type="number" name="reviewLimit" value="${st.reviewLimit}"></label>
           <button class="btn primary">Salvar</button></form></section>
@@ -988,6 +998,11 @@ VIEWS.config = () => {
       <section class="card full"><header><h3>Roteiro de ligação</h3></header>
         <form data-form="script"><textarea name="script" rows="12">${esc(S.settings.script || SCRIPT_DEFAULT)}</textarea>
         <div class="btns"><button class="btn primary">Salvar roteiro</button><button type="button" class="btn ghost" data-act="scriptReset">Voltar ao padrão</button></div></form></section>
+      <section class="card"><header><h3>Código de bloqueio</h3></header>
+        <p>Pede um código ao abrir o app <b>neste aparelho</b>. Útil se outra pessoa usa o celular ou o computador.</p>
+        ${pinSet() ? `<p><b>✓ Código ativo neste aparelho.</b></p><button class="btn danger" data-act="pinRemove">Tirar o código</button>`
+          : `<form class="addrow" data-form="pin"><input type="password" inputmode="numeric" name="pin" minlength="4" maxlength="8" placeholder="4 a 8 números" autocomplete="off" required aria-label="Novo código"><button class="btn primary">Ativar código</button></form>`}
+        <p class="hint">Não é login de servidor: protege o acesso ao app neste aparelho.</p></section>
       <section class="card"><header><h3>Rotinas das clínicas</h3></header>
         <p>Aplica o ciclo de campanha e conteúdo e as rotinas de segunda nas clínicas que já têm jornada, só daqui para frente.</p>
         <button class="btn" data-act="refreshAll">Atualizar rotinas de todas as clínicas</button></section>
@@ -1025,6 +1040,7 @@ function renderPanel() {
       <h4>Checklist ${t.checklist.length ? `<small>${t.checklist.filter((i) => i.done).length}/${t.checklist.length}</small>` : ''}</h4>
       <ul class="cl">${t.checklist.map((i, k) => `<li><label><input type="checkbox" data-act="chk" data-i="${k}" ${i.done ? 'checked' : ''}> <span>${esc(i.t)}</span></label><button class="x" data-act="chkDel" data-i="${k}" aria-label="Remover item">×</button></li>`).join('')}</ul>
       <form class="addrow" data-form="chkAdd"><input name="t" placeholder="Adicionar item…" aria-label="Novo item do checklist"><button class="btn sm">+</button></form>
+      <label class="full"><span>Link do arquivo (Drive, pasta, documento)</span><span class="linkrow"><input data-tf="link" value="${esc(t.link || '')}" placeholder="https://drive.google.com/…">${t.link ? `<button class="btn sm" data-act="openLink" data-v="${esc(t.link)}">Abrir</button>` : ''}</span></label>
       <label class="full"><span>Evidência (link, arquivo, resumo)</span><textarea data-tf="evidence" rows="2">${esc(t.evidence)}</textarea></label>
       ${t.meeting && !(t.notes || '').trim() ? `<button class="btn sm" data-act="insertAgenda" style="margin-top:12px">Inserir pauta padrão</button>` : ''}
       <label class="full"><span>${t.meeting ? 'Pauta, ata, decisões e presença' : 'Observações / comentários'}</span><textarea data-tf="notes" rows="${t.meeting ? 14 : 3}">${esc(t.notes)}</textarea></label>
@@ -1077,6 +1093,7 @@ function clinicForm(c) {
       <label class="chkl"><input type="checkbox" name="setupWaived" ${c.setupWaived ? 'checked' : ''}> Implantação isenta</label>
       <label class="chkl full"><input type="checkbox" name="weekends" ${c.weekends ? 'checked' : ''}> A clínica trabalha também aos fins de semana (opcional)</label>
       <label class="full"><span>Motivo da isenção</span><input name="setupReason" value="${esc(c.setupReason || '')}"></label>
+      <label><span>Dia de vencimento</span><input type="number" min="1" max="28" name="dueDay" value="${c.dueDay ?? ''}" placeholder="dia do início"></label>
       <label><span>Pagamento</span><select name="payment">${opt([['em_dia', 'Em dia'], ['pendente', 'Pendente'], ['atrasado', 'Atrasado'], ['na', 'Não se aplica']], c.payment)}</select></label>
     </fieldset>
     <fieldset><legend>Exclusividade e garantia</legend>
@@ -1203,6 +1220,13 @@ document.addEventListener('click', (e) => {
       ui.clinicTab = 'hoje'; ui.lastClinic = c.id; go('#/clinica/' + c.id);
     },
     impOpen: () => importForm(),
+    resN2: () => { ui.resN = +d.n; render(); },
+    finNav: () => { ui.finYm = +d.d === 0 ? todayStr().slice(0, 7) : ymAdd(ui.finYm || todayStr().slice(0, 7), +d.d); render(); },
+    payToggle: () => { const p = S.payments.find((x) => x.id === d.id); if (!p) return; p.paidAt = p.paidAt ? null : todayStr(); const c = clinicById(p.clinicId); log(`${p.paidAt ? 'Recebido' : 'Desfeito recebimento'}: ${c ? c.name : ''} ${p.kind} ${p.ym} (${money(p.amount)})`, p.clinicId);
+      const curYm = todayStr().slice(0, 7); if (c && p.ym === curYm) c.payment = p.paidAt ? 'em_dia' : (p.due < todayStr() ? 'atrasado' : 'pendente'); rerender(); toast(p.paidAt ? 'Marcado como recebido' : 'Recebimento desfeito'); },
+    pinRemove: () => { if (!confirm('Tirar o código deste aparelho?')) return; try { localStorage.removeItem(PIN_KEY); } catch (e) {} render(); toast('Código removido'); },
+    vOwner: () => { ui.vOwner = d.o; render(); },
+    openLink: () => { const v = (d.v || '').trim(); if (v) window.open(/^https?:/i.test(v) ? v : 'https://' + v, '_blank', 'noopener'); },
     queueOpen: () => queueForm(d.uf),
     qGo: () => qGo(),
     qClear: () => { ui.q.f.sel = []; qRender(); },
@@ -1276,6 +1300,7 @@ document.addEventListener('change', (e) => {
       if (t.checklist.every((x) => x.done) && t.status === 'a_fazer') setTask(t, 'status', 'andamento'); if (t.checklist.some((x) => x.done) && t.status === 'a_fazer') setTask(t, 'status', 'andamento'); rerender(); },
     impFile: () => { const fl = el.files[0]; if (!fl) return; $('#impBody').innerHTML = '<p class="hint">Lendo o arquivo…</p>'; readLeadFile(fl).then(impLoad).catch((er) => { $('#impBody').innerHTML = empty('Não consegui ler: ' + er.message, 'alert'); }); },
     lcity: () => { ui.lcity = el.value; render(); },
+    resN: () => { ui.resN = +el.value; render(); },
     presClinic: () => { ui.presClinic = el.value || null; render(); },
     mapClinic: () => { ui.mapClinic = el.value || null; history.replaceState(null, '', '#/mapa'); closePanel(); render(); },
     kanMonth: () => { ui.kanMonth = el.value; render(); },
@@ -1304,6 +1329,11 @@ document.addEventListener('click', (e) => {
 });
 let tqTimer;
 document.addEventListener('input', (e) => {
+  const dsx = e.target.dataset || {};
+  if (dsx.mf) { const m = metricEnsure(dsx.c, +dsx.n); m[dsx.mf] = e.target.value === '' ? null : Number(e.target.value); m.updatedAt = new Date().toISOString(); save();
+    const sv = $('#mSaved'); if (sv) sv.textContent = 'salvo ✓'; clearTimeout(ui.mfT); ui.mfT = setTimeout(() => { const y = $('.main').scrollTop; const k = dsx.mf; render(); $('.main').scrollTop = y; const i = document.querySelector(`[data-mf="${k}"]`); if (i) { i.focus(); const L = i.value.length; try { i.setSelectionRange(L, L); } catch (er) {} } }, 900); return; }
+  if (dsx.goal) { const c = clinicById(dsx.c); c.goals = c.goals || {}; c.goals[dsx.goal] = e.target.value === '' ? null : Number(e.target.value); save();
+    clearTimeout(ui.mfT); ui.mfT = setTimeout(() => { const y = $('.main').scrollTop; const k = dsx.goal; render(); $('.main').scrollTop = y; const i = document.querySelector(`[data-goal="${k}"]`); if (i) i.focus(); }, 900); return; }
   const dq = e.target.dataset && e.target.dataset.q;
   if (dq && ui.q) { const el = e.target; const f = ui.q.f;
     if (dq === 'city') { const v = el.value; f.sel = el.checked ? [...new Set([...f.sel, v])] : f.sel.filter((x) => x !== v); qRender(); return; }
@@ -1334,7 +1364,7 @@ document.addEventListener('submit', (e) => {
     const c = isNew ? { id: uid(), createdAt: new Date().toISOString() } : clinicById(f.dataset.id);
     const oldStart = c.startDate;
     Object.assign(c, { name: g('name'), segment: g('segment'), stage: g('stage'), city: g('city'), uf: g('uf').toUpperCase(), contact: g('contact'), phone: g('phone'), humanResp: g('humanResp'),
-      startDate: g('startDate') || todayStr(), price: n('price'), baseRevenue: n('baseRevenue'), mediaBudget: n('mediaBudget'), setupFee: n('setupFee'), setupWaived: fd.get('setupWaived') === 'on', setupReason: g('setupReason'), weekends: fd.get('weekends') === 'on',
+      startDate: g('startDate') || todayStr(), price: n('price'), baseRevenue: n('baseRevenue'), mediaBudget: n('mediaBudget'), setupFee: n('setupFee'), setupWaived: fd.get('setupWaived') === 'on', setupReason: g('setupReason'), weekends: fd.get('weekends') === 'on', dueDay: n('dueDay'),
       payment: g('payment'), territory: g('territory'), exclusivity: g('exclusivity'), guarantee: g('guarantee'), goal: g('goal'), notes: g('notes') });
     if (c.setupWaived && !c.setupReason) { alert('Informe o motivo da isenção da implantação.'); return; }
     const conf = conflictsFor(c);
@@ -1348,6 +1378,9 @@ document.addEventListener('submit', (e) => {
     S.tasks.push(t); log(`Criou tarefa “${t.title}”`, t.clinicId); closeModal(); rerender(); openPanel({ type: 'task', id: t.id });
   } else if (kind === 'chkAdd') {
     const t = taskById(ui.panel.id); if (!g('t')) return; t.checklist.push({ t: g('t'), done: false }); rerender(); setTimeout(() => $('#panel [name="t"]')?.focus(), 30);
+  } else if (kind === 'pin') {
+    const v = g('pin'); if (!/^\d{4,8}$/.test(v)) { alert('Use de 4 a 8 números.'); return; }
+    pinHash(v).then((h) => { try { localStorage.setItem(PIN_KEY, h); sessionStorage.setItem('roity-unlocked', '1'); } catch (er) {} render(); toast('Código ativado neste aparelho'); });
   } else if (kind === 'pf') {
     pfSet({ cnae: g('cnae'), noIndiv: fd.get('noIndiv') === 'on', minAge: +g('minAge') }); closeModal(); render(); toast('Filtros aplicados');
   } else if (kind === 'script') {
@@ -1366,6 +1399,7 @@ document.addEventListener('submit', (e) => {
   } else if (kind === 'settings') {
     if (g('opS')) S.settings.schedule = { op: [g('opS'), g('opE')], pr: [g('prS'), g('prE')] };
     if (fd.has('gCalls')) S.settings.goals = { calls: n('gCalls') ?? 30, convos: n('gConv') ?? 5, pres: n('gPres') ?? 1 };
+    S.settings.hourCost = n('hourCost'); S.settings.toolsCost = n('toolsCost');
     Object.assign(S.settings, { goalClinics: n('goalClinics') || 20, workDays: n('workDays') || 21, hoursPerCreative: n('hoursPerCreative') ?? 0.25, reviewLimit: n('reviewLimit') ?? 2 });
     S.settings.capacity = { Tiago: n('capT') ?? 4, Micaela: n('capM') ?? 4 }; save(); toast('Configurações salvas');
   } else if (kind === 'camp') {
