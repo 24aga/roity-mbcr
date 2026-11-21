@@ -97,42 +97,48 @@ VIEWS.visao = () => {
   const meetings = open.filter((t) => t.meeting && t.due >= today && t.due <= wEnd);
   const pendingCr = S.creatives.filter((x) => { const c = clinicById(x.clinicId); return c && currentMonth(c) === x.month && !['em_uso', 'aprovado', 'nao_necessario'].includes(x.status); });
   const goal = S.settings.goalClinics;
-  const byMonth = Array.from({ length: 12 }, (_, i) => journeyClinics().filter((c) => ['ativo', 'onboarding'].includes(c.stage) && currentMonth(c) === i + 1));
-  const maxBy = Math.max(1, ...byMonth.map((l) => l.length));
   const cap = capacity();
   const alerts = buildAlerts();
   const hasDemo = S.clinics.some((c) => c.demo);
-  const upcoming = open.filter((t) => t.due <= wEnd).sort((a, b) => a.due.localeCompare(b.due)).slice(0, 8);
+  const upcoming = open.filter((t) => t.due <= wEnd);
+
+  const weekClinics = journeyClinics().filter((c) => ['ativo', 'onboarding'].includes(c.stage)).map((c) => {
+    const n = currentMonth(c);
+    const tasks = open.filter((t) => t.clinicId === c.id && t.due <= wEnd).sort((a, b) => a.due.localeCompare(b.due));
+    return { c, n, tasks, st: n >= 1 && n <= 12 ? monthData(c, n).state : null };
+  });
+  const hello = (() => { const h = +new Intl.DateTimeFormat('pt-BR', { timeZone: TZ, hour: 'numeric', hour12: false }).format(new Date()); return h < 12 ? 'Bom dia' : h < 18 ? 'Boa tarde' : 'Boa noite'; })();
 
   view().innerHTML = `
     ${hasDemo ? `<div class="notice">Você está vendo <b>dados de demonstração</b> (marcados DEMO). Remova-os em <a href="#/config">Configurações</a> quando cadastrar suas clínicas.</div>` : ''}
-    <div class="kpis">
+    <div class="hello"><small>${fmtDate(today, { weekday: 'long', day: '2-digit', month: 'long' })}</small><h2>${hello}, ${esc(S.me)}.</h2>
+      <p>${overdue.length ? `<b class="red">${overdue.length} entrega(s) atrasada(s)</b> · ` : ''}${upcoming.length ? `${open.filter((t) => t.due <= wEnd).length} entrega(s) até ${fmtShort(wEnd)}` : 'Nada vencendo esta semana'} · ${meetings.length} reunião(ões)</p></div>
+    <div class="kpis k4">
       <a class="kpi" href="#/clinicas"><span>Clínicas ativas</span><b>${active.length}<small> / ${goal}</small></b>
         <div class="bar"><i style="width:${Math.min(100, (active.length / goal) * 100)}%"></i></div></a>
-      <a class="kpi" href="#/financeiro"><span>MRR bruto (contratado)</span><b>${money(mrr)}</b><em>Meta: ${money(goal * 2500)}</em></a>
-      <a class="kpi" href="#/clinicas"><span>Em onboarding</span><b>${onb.length}</b><em>${S.clinics.filter((c) => ['lead', 'proposta', 'negociacao'].includes(c.stage)).length} no pipeline</em></a>
-      <a class="kpi ${overdue.length ? 'warn' : ''}" href="#/tarefas" data-act="tf" data-f="atrasadas"><span>Tarefas atrasadas</span><b>${overdue.length}</b><em>${todayT.length} para hoje</em></a>
-      <a class="kpi" href="#/calendario"><span>Reuniões em 7 dias</span><b>${meetings.length}</b><em>${S.clinics.filter((c) => c.stage === 'ativo').length * 2} previstas/mês</em></a>
-      <a class="kpi" href="#/criativos"><span>Criativos pendentes</span><b>${pendingCr.length}</b><em>mês atual de cada clínica</em></a>
+      <a class="kpi" href="#/financeiro"><span>MRR contratado</span><b>${money(mrr)}</b><em>Meta: ${money(goal * 2500)}</em></a>
+      <a class="kpi ${overdue.length ? 'warn' : ''}" href="#/tarefas" data-act="tf" data-f="atrasadas"><span>Atrasadas</span><b>${overdue.length}</b><em>${todayT.length} para hoje</em></a>
+      <a class="kpi" href="#/criativos"><span>Criativos em produção</span><b>${pendingCr.length}</b><em>${onb.length} clínica(s) em onboarding</em></a>
     </div>
+    <h3 class="sec-t">Entregas da semana por clínica</h3>
+    ${weekClinics.length ? `<div class="wk">${weekClinics.map(({ c, n, tasks, st }) => `
+      <section class="card wkc">
+        <header><div><h3><a href="#/clinica/${c.id}">${esc(c.name)}</a>${demoBadge(c)}</h3>
+          <small>${n >= 1 && n <= 12 ? `Mês ${n} · ${esc(c.journey.template[n - 1].short)}` : n > 12 ? 'Jornada encerrada' : 'Começa ' + fmtShort(c.startDate)}</small></div>
+          <a class="btn sm" href="#/mapa/${c.id}" data-act="openMap" data-id="${c.id}">Mapa</a></header>
+        ${st ? `<div class="wk-p"><div class="bar"><i style="width:${st.p * 100}%"></i></div><span>${Math.round(st.p * 100)}% do mês</span></div>` : ''}
+        ${tasks.length ? `<ul class="tlist">${tasks.slice(0, 6).map((t) => taskRow(t, { day: true })).join('')}</ul>${tasks.length > 6 ? `<a class="link" href="#/tarefas" data-act="tf" data-f="semana">+ ${tasks.length - 6} entrega(s)</a>` : ''}` : empty('Nada para esta semana.')}
+      </section>`).join('')}</div>` : empty('Nenhuma clínica ativa com jornada. Cadastre uma em Clínicas.')}
     <div class="grid2">
-      <section class="card">
-        <header><h3>Próximos 7 dias</h3><a href="#/tarefas" class="link">Ver tarefas →</a></header>
-        ${upcoming.length ? `<ul class="tlist">${upcoming.map(taskRow).join('')}</ul>` : empty('Nada vencendo nos próximos 7 dias.')}
-      </section>
       <section class="card">
         <header><h3>Alertas</h3></header>
         ${alerts.length ? `<ul class="alerts">${alerts.map((a) => `<li class="al-${a.k}"><b>${esc(a.t)}</b><span>${a.d}</span></li>`).join('')}</ul>` : empty('Sem alertas no momento.')}
       </section>
       <section class="card">
-        <header><h3>Clínicas por mês da jornada</h3></header>
-        <div class="months-bars">${byMonth.map((l, i) => `<div class="mb" title="Mês ${i + 1}: ${l.length}"><i style="height:${(l.length / maxBy) * 100}%;background:${PILLARS[MONTHS[i].pillars[0]].color}"></i><b>${l.length || ''}</b><span>${i + 1}</span></div>`).join('')}</div>
-      </section>
-      <section class="card">
-        <header><h3>Carga operacional estimada (mês)</h3><a class="link" href="#/config">Ajustar →</a></header>
+        <header><h3>Carga de trabalho estimada (mês)</h3><a class="link" href="#/config">Ajustar →</a></header>
         ${Object.entries(cap.people).map(([p, v]) => `<div class="cap"><div class="cap-h"><b>${p}</b><span>${v.need.toFixed(0)}h de ${v.cap}h</span></div>
           <div class="bar ${v.need > v.cap ? 'over' : ''}"><i style="width:${Math.min(100, (v.need / v.cap) * 100)}%"></i></div></div>`).join('')}
-        <p class="hint">Estimativa a partir das tarefas do mês atual de cada clínica ativa + ${CREATIVES_PER_MONTH} criativos × ${S.settings.hoursPerCreative}h. Reuniões: ${active.length * 2}h/mês. Não inclui suporte e administração.</p>
+        <p class="hint">Tarefas do mês atual de cada clínica + ${CREATIVES_PER_MONTH} criativos × ${S.settings.hoursPerCreative}h. Reuniões: ${active.length * 2}h/mês. Não inclui suporte.</p>
       </section>
     </div>`;
 };
@@ -454,16 +460,26 @@ VIEWS.relatorio = () => {
       <div class="btns"><label class="chkl"><input type="checkbox" data-act="approveReport" data-c="${c.id}" data-n="${n}" ${approved ? 'checked' : ''}> Revisado e aprovado por Tiago</label>
       <button class="btn primary" data-act="print">Salvar PDF / Imprimir</button></div></div>
     <article class="report">
-      <header><div class="rlogo">ROITY · MBCR</div><h1>Relatório mensal — Mês ${n}</h1><p>${esc(c.name)} · ${fmtDate(monthStart(c, n))} a ${fmtDate(monthEnd(c, n))}</p>
-        <p class="${approved ? '' : 'draft'}">${approved ? `Aprovado por ${esc(approved.who)} em ${fmtDate(approved.at.slice(0, 10))}` : 'RASCUNHO — aguardando revisão de Tiago antes do envio'}</p></header>
-      <h2>${esc(md.title)}</h2><p>${esc(md.desc)}</p>
-      <h3>Ações executadas (${done.length})</h3><ul>${done.map((t) => `<li>${esc(t.title)}${t.evidence ? ` — <i>${esc(t.evidence)}</i>` : ''}</li>`).join('') || '<li>—</li>'}</ul>
-      <h3>Pendências (${pend.length})</h3><ul>${pend.map((t) => `<li>${esc(t.title)} <small>(${esc(t.owner)} · ${statusName(t.status)})</small></li>`).join('') || '<li>Nenhuma</li>'}</ul>
-      ${next ? `<h3>Próximos passos — Mês ${n + 1}: ${esc(next.title)}</h3><ul>${next.novo.map((t) => `<li>${esc(t.title)}</li>`).join('')}</ul>` : '<h3>Próximos passos</h3><p>Plano do próximo ciclo e proposta de renovação.</p>'}
+      <div class="r-band"><span class="r-word">ROITY</span><div><b>Relatório mensal — Mês ${n}</b><small>${esc(md.title).toUpperCase()}</small></div></div>
+      <div class="r-red"></div>
+      <div class="r-body">
+        <div class="r-eyebrow">RELATÓRIO MENSAL · ${fmtDate(monthStart(c, n), { month: 'long', year: 'numeric' }).toUpperCase()}</div>
+        <h1>${esc(c.name)}</h1>
+        <p class="${approved ? 'r-ok' : 'draft'}">${approved ? `Revisado e aprovado por ${esc(approved.who)} em ${fmtDate(approved.at.slice(0, 10))}` : 'RASCUNHO — aguardando revisão de Tiago antes do envio'}</p>
+        <div class="r-stats"><div class="hero"><span>ENTREGAS CONCLUÍDAS</span><b>${done.length}/${md.tasks.length}</b></div><div><span>PERÍODO</span><b>${fmtShort(monthStart(c, n))} – ${fmtShort(monthEnd(c, n))}</b></div><div><span>MÊS DA JORNADA</span><b>${n} de 12</b></div></div>
+        <h2><span class="r-badge">01</span>Foco do mês</h2><p>${esc(md.desc)}</p>
+        <h2><span class="r-badge">02</span>O que entregamos</h2><ol>${done.map((t) => `<li><b>${esc(clientTitle(t.title))}</b>${t.evidence ? ` — ${esc(t.evidence)}` : ''}</li>`).join('') || '<li>—</li>'}</ol>
+        ${pend.length ? `<div class="r-alert"><b>PENDÊNCIAS</b><ul>${pend.map((t) => `<li>${esc(clientTitle(t.title))} <small>(${t.owner === 'Clínica' ? 'depende da clínica' : statusName(t.status)})</small></li>`).join('')}</ul></div>` : ''}
+        <h2><span class="r-badge">03</span>Próximos passos</h2>
+        ${next ? `<p><b>Mês ${n + 1}: ${esc(next.title)}</b></p><ol>${next.novo.map((t) => `<li>${esc(clientTitle(t.title))}</li>`).join('')}</ol>` : '<p>Plano do próximo ciclo e proposta de renovação.</p>'}
+        <footer class="r-foot"><span><b>${esc(c.name).toUpperCase()}</b> · RELATÓRIO MENSAL</span><span>ROITY · MÉTODO MBCR</span></footer>
+      </div>
     </article>`;
 };
 
 // ---------- Apresentar ao cliente (modo venda) ----------
+// títulos sem jargão interno para o cliente
+const clientTitle = (t) => t.replace(/\s*\((NÃO ativar[^)]*|revisão humana\/jurídica|com consentimento|referência: até 10 min|respeitando indicação clínica)\)/i, '').replace(' — registrar aprovação', '').replace('CRM operacional: todo lead com status, responsável e resultado', 'Organização de todos os contatos');
 const PILLAR_DESC = {
   M: 'Anúncios, ofertas e captação de novos pacientes.',
   B: 'Posicionamento, Instagram, conteúdo e criativos.',
@@ -492,7 +508,7 @@ VIEWS.apresentar = () => {
       <a class="btn sm" href="#/visao">Sair da apresentação</a>
     </div>
     <section class="pres-hero">
-      <div class="rlogo">ROITY · MÉTODO MBCR</div>
+      <div class="pres-word">ROITY</div><div class="pres-wsub">Assessoria Empresarial · Método MBCR</div>
       <h1>${c ? `Plano de crescimento para<br><em>${esc(c.name)}</em>` : 'Seus próximos 12 meses<br><em>de crescimento</em>'}</h1>
       <p>Nós assumimos o crescimento comercial da sua clínica com estratégia, processo e atendimento 24 horas.</p>
       <div class="pres-pillars">${Object.values(PILLARS).map((p) => `<div style="--pc:${p.color}"><b>${p.name[0]}</b><span>${p.name}</span><small>${PILLAR_DESC[p.key]}</small></div>`).join('')}</div>
@@ -519,7 +535,7 @@ VIEWS.apresentar = () => {
     </section>`;
   if (mm) mm.destroy();
   mm = new MindMap($('#presMap'), {
-    clinic: null, present: true, getMonthData: (k) => monthData(null, k),
+    clinic: null, present: true, titleFor: clientTitle, getMonthData: (k) => monthData(null, k),
     onMonth: (k) => { ui.presMonth = k; renderPresMonth(); $('#presMonthSec').scrollIntoView({ behavior: 'smooth', block: 'start' }); },
     onTask: () => {}, onTemplateItem: () => {},
   });
@@ -540,7 +556,7 @@ function renderPresMonth() {
         <div class="pm-tags">${md.pillars.map(pillarTag).join('')}</div></div></header>
       <p class="pm-desc">${esc(md.desc)}</p>
       <div class="pm-cols">
-        <div><h4>O que fazemos neste mês</h4><ol>${md.novo.map((t) => `<li><b>${esc(t.title)}</b>${howTo(t.title) ? `<small>${esc(howTo(t.title))}</small>` : ''}</li>`).join('')}</ol></div>
+        <div><h4>O que fazemos neste mês</h4><ol>${md.novo.map((t) => `<li><b>${esc(clientTitle(t.title))}</b><small>${esc(clientText(t.title))}</small></li>`).join('')}</ol></div>
         <div><h4>O que você recebe</h4><ul class="pm-out">${md.outputs.map((o) => `<li>${esc(o)}</li>`).join('')}</ul>
           <div class="pm-plus">+ continua: até 6 criativos, 2 reuniões, Meta Ads, 24AGÁ e relatório.</div></div>
       </div>

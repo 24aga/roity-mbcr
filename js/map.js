@@ -148,7 +148,7 @@ class MindMap {
       const d = `M${e.from[0]},${e.from[1]} C${c1[0]},${c1[1]} ${c2[0]},${c2[1]} ${e.to[0]},${e.to[1]}`;
       const col = e.pillar ? PILLARS[e.pillar].color : 'var(--line-strong)';
       const dim = fp && e.pillar && e.pillar !== fp ? ' dim' : '';
-      const hl = fp && e.pillar === fp ? ' hl' : '';
+      const hl = (fp && e.pillar === fp) || (e.type === 'cross' && !fp && e.month === this.expanded) ? ' hl' : '';
       out += `<path class="mm-edge ${e.type}${dim}${hl}" data-month="${e.month || ''}" d="${d}" style="stroke:${col}"/>`;
     }
     for (const nd of nodes) out += this.nodeSVG(nd, match, fp, q);
@@ -217,7 +217,7 @@ class MindMap {
         <rect class="l-bg" width="${w}" height="${LH}" rx="10"/>
         <rect width="4" height="${LH - 16}" x="8" y="8" rx="2" style="fill:${col}"/>
         <circle class="l-st" cx="26" cy="${LH / 2}" r="9"/><text class="l-mk" x="26" y="${LH / 2 + 4}">${mark}</text>
-        <text class="l-t" x="42" y="19">${esc(trunc(it.title, 44))}</text>
+        <text class="l-t" x="42" y="19">${esc(trunc(this.o.titleFor ? this.o.titleFor(it.title) : it.title, 44))}</text>
         <text class="l-s" x="42" y="36">${esc(trunc(sub, 52))}</text></g>`;
     }
     return '';
