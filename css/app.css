@@ -997,3 +997,10 @@ a.kpi:hover, .ccard:hover { transform: translateY(-2px); box-shadow: 0 10px 28px
   .cnt b { font-size: 21px; }
   .backs li { flex-direction: column; align-items: stretch; } .backs .btns { display: grid; grid-template-columns: 1fr 1fr; }
 }
+
+/* varredura: ajustes finais */
+:root:not([data-theme="dark"]) { --ok: #047857; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --ok: #22b07d; } }
+:root[data-theme="dark"] { --ok: #22b07d; }
+.report .p-totals div:first-child small, .report .p-totals div:first-child span, .report .p-totals div:first-child b { color: #fff; }
+.pipeline { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); overflow: visible; }
