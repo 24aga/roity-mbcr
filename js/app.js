@@ -110,7 +110,7 @@ VIEWS.visao = () => {
   const hello = (() => { const h = +new Intl.DateTimeFormat('pt-BR', { timeZone: TZ, hour: 'numeric', hour12: false }).format(new Date()); return h < 12 ? 'Bom dia' : h < 18 ? 'Boa tarde' : 'Boa noite'; })();
 
   view().innerHTML = `
-    ${hasDemo ? `<div class="notice">Você está vendo <b>dados de demonstração</b> (marcados DEMO). Remova-os em <a href="#/config">Configurações</a> quando cadastrar suas clínicas.</div>` : ''}
+    ${hasDemo ? `<div class="notice demo-n"><span>Você está vendo <b>dados de demonstração</b> (marcados DEMO).</span><button class="btn sm danger" data-act="clearDemo">Apagar clínicas DEMO</button></div>` : ''}
     <div class="hello"><small>${fmtDate(today, { weekday: 'long', day: '2-digit', month: 'long' })}</small><h2>${hello}, ${esc(S.me)}.</h2>
       <p>${overdue.length ? `<b class="red">${overdue.length} entrega(s) atrasada(s)</b> · ` : ''}${upcoming.length ? `${open.filter((t) => t.due <= wEnd).length} entrega(s) até ${fmtShort(wEnd)}` : 'Nada vencendo esta semana'} · ${meetings.length} reunião(ões)</p></div>
     <div class="kpis k4">
@@ -277,8 +277,9 @@ function listHTML(clinic) {
 VIEWS.clinicas = () => {
   const cols = STAGES;
   view().innerHTML = `
-    <div class="page-h"><p class="muted">Pipeline de clínicas (clientes da Roity). O funil de pacientes de cada clínica fica em Resultados.</p>
+    <div class="page-h"><p class="muted">Pipeline de clínicas (clientes da Roity). Toque numa clínica para abrir, editar ou excluir.</p>
       <button class="btn primary" data-act="newClinic">+ Nova clínica</button></div>
+    ${S.clinics.some((c) => c.demo) ? `<div class="notice demo-n"><span>Estas clínicas marcadas <b>DEMO</b> são só exemplo.</span><button class="btn sm danger" data-act="clearDemo">Apagar clínicas DEMO</button></div>` : ''}
     ${S.clinics.length ? `<div class="pipeline">${cols.map(([k, l]) => {
       const list = S.clinics.filter((c) => c.stage === k);
       return `<section class="pcol"><header><b>${l}</b><span>${list.length}</span></header>
@@ -345,7 +346,7 @@ VIEWS.clinica = () => {
     body = `<section class="card"><ul class="log">${l.map(logItem).join('') || empty('Sem histórico.')}</ul></section>`;
   }
   view().innerHTML = `
-    <div class="ch"><a href="#/clinicas" class="back">← Clínicas</a>
+    <div class="ch"><div class="ch-top"><a href="#/clinicas" class="back">← Clínicas</a><span class="btns" style="margin:0"><button class="btn sm" data-act="editClinic" data-id="${c.id}">Editar</button><button class="btn sm danger" data-act="delClinic" data-id="${c.id}">Excluir clínica</button></span></div>
       <h2>${esc(c.name)}${demoBadge(c)}</h2><span class="muted">${segLabel(c.segment)} · ${esc(c.city || '')} · ${stageLabel(c.stage)}</span></div>
     <div class="tabs">${tabs.map(([k, l]) => `<button class="${ui.clinicTab === k ? 'on' : ''}" data-act="clinicTab" data-t="${k}">${l}</button>`).join('')}</div>
     ${body}`;
@@ -460,7 +461,7 @@ VIEWS.relatorio = () => {
       <div class="btns"><label class="chkl"><input type="checkbox" data-act="approveReport" data-c="${c.id}" data-n="${n}" ${approved ? 'checked' : ''}> Revisado e aprovado por Tiago</label>
       <button class="btn primary" data-act="print">Salvar PDF / Imprimir</button></div></div>
     <article class="report">
-      <div class="r-band"><span class="r-word">ROITY</span><div><b>Relatório mensal — Mês ${n}</b><small>${esc(md.title).toUpperCase()}</small></div></div>
+      <div class="r-band"><img class="r-logo" src="icons/logo-white.png" alt="ROITY"><div><b>Relatório mensal — Mês ${n}</b><small>${esc(md.title).toUpperCase()}</small></div></div>
       <div class="r-red"></div>
       <div class="r-body">
         <div class="r-eyebrow">RELATÓRIO MENSAL · ${fmtDate(monthStart(c, n), { month: 'long', year: 'numeric' }).toUpperCase()}</div>
@@ -505,10 +506,10 @@ VIEWS.apresentar = () => {
       <select data-act="presClinic" aria-label="Preparar para">
         <option value="">Apresentação geral</option>${S.clinics.map((x) => `<option value="${x.id}"${c && x.id === c.id ? ' selected' : ''}>Para: ${esc(x.name)}</option>`).join('')}
       </select>
-      <a class="btn sm" href="#/visao">Sair da apresentação</a>
+      <span class="btns" style="margin:0"><button class="theme-btn" data-act="themeToggle" aria-label="Alternar modo claro/escuro">${isDark() ? '☀' : '☾'}</button><a class="btn sm" href="#/visao">Sair da apresentação</a></span>
     </div>
     <section class="pres-hero">
-      <div class="pres-word">ROITY</div><div class="pres-wsub">Assessoria Empresarial · Método MBCR</div>
+      <img class="pres-logo" src="icons/logo-white.png" alt="ROITY"><div class="pres-wsub">Assessoria Empresarial · Método MBCR</div>
       <h1>${c ? `Plano de crescimento para<br><em>${esc(c.name)}</em>` : 'Seus próximos 12 meses<br><em>de crescimento</em>'}</h1>
       <p>Nós assumimos o crescimento comercial da sua clínica com estratégia, processo e atendimento 24 horas.</p>
       <div class="pres-pillars">${Object.values(PILLARS).map((p) => `<div style="--pc:${p.color}"><b>${p.name[0]}</b><span>${p.name}</span><small>${PILLAR_DESC[p.key]}</small></div>`).join('')}</div>
@@ -738,9 +739,12 @@ function toCSV(rows, cols) {
   const q = (v) => { const s = v == null ? '' : String(v); return /[";\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
   return '﻿' + cols.join(';') + '\n' + rows.map((r) => cols.map((c) => q(r[c])).join(';')).join('\n');
 }
+function isDark() { const t = S.settings.theme; return t === 'dark' || (t === 'auto' && matchMedia('(prefers-color-scheme: dark)').matches); }
 function applyTheme() {
   const t = S.settings.theme; const root = document.documentElement;
   if (t === 'auto') root.removeAttribute('data-theme'); else root.dataset.theme = t;
+  const b = document.getElementById('themeBtn'); if (b) { b.textContent = isDark() ? '☀' : '☾'; b.title = isDark() ? 'Modo claro' : 'Modo escuro'; }
+  document.querySelector('meta[name="theme-color"]')?.setAttribute('content', isDark() ? '#010103' : '#f3f5fb');
 }
 
 // ================= eventos =================
@@ -755,7 +759,7 @@ document.addEventListener('click', (e) => {
     clinicTab: () => { ui.clinicTab = d.t; render(); },
     newClinic: () => clinicForm(),
     editClinic: () => clinicForm(clinicById(d.id)),
-    delClinic: () => { const c = clinicById(d.id); if (confirm(`Excluir “${c.name}” e todas as tarefas, criativos e métricas dela? Não dá para desfazer.`)) { deleteClinic(d.id); log(`Excluiu a clínica ${c.name}`); closeModal(); save(); go('#/clinicas'); render(); } },
+    delClinic: () => { const c = clinicById(d.id); if (confirm(`Excluir “${c.name}” e todas as tarefas, criativos e métricas dela? Não dá para desfazer.`)) { deleteClinic(d.id); log(`Excluiu a clínica ${c.name}`); if ($('#modal').open) closeModal(); if (ui.mapClinic === d.id) ui.mapClinic = null; save(); toast('Clínica excluída'); if (location.hash === '#/clinicas') render(); else go('#/clinicas'); } },
     startJourney: () => { const c = clinicById(d.id); startJourney(c); if (c.stage !== 'ativo') c.stage = 'onboarding'; save(); render(); toast('Jornada criada: 12 meses de tarefas'); },
     openMap: () => { ui.mapClinic = d.id; ui.mapMode = 'mapa'; },
     closeModal: () => closeModal(),
@@ -776,10 +780,11 @@ document.addEventListener('click', (e) => {
       if (d.k === 'clinics') download('clinicas.csv', toCSV(S.clinics, ['name', 'segment', 'city', 'uf', 'stage', 'price', 'setupFee', 'setupWaived', 'mediaBudget', 'baseRevenue', 'startDate', 'payment', 'exclusivity', 'territory', 'demo']), 'text/csv');
       if (d.k === 'tasks') download('tarefas.csv', toCSV(S.tasks.map((t) => ({ ...t, clinica: clinicById(t.clinicId)?.name, statusLabel: statusName(t.status) })), ['clinica', 'month', 'kind', 'pillar', 'title', 'owner', 'due', 'statusLabel', 'doneAt', 'evidence']), 'text/csv');
     },
-    clearDemo: () => { const ds = S.clinics.filter((c) => c.demo); if (!ds.length) return toast('Não há dados DEMO'); if (confirm(`Remover ${ds.length} clínica(s) DEMO?`)) { ds.forEach((c) => deleteClinic(c.id)); log('Removeu dados DEMO'); save(); render(); toast('Dados DEMO removidos'); } },
+    clearDemo: () => { const ds = S.clinics.filter((c) => c.demo); if (!ds.length) return toast('Não há dados DEMO'); if (confirm(`Apagar ${ds.length} clínica(s) DEMO e todas as tarefas delas? Suas clínicas reais não são afetadas.`)) { ds.forEach((c) => deleteClinic(c.id)); if (ds.some((c) => c.id === ui.mapClinic)) ui.mapClinic = null; log('Removeu dados DEMO'); saveNow(); render(); toast('Clínicas DEMO apagadas'); } },
     addDemo: () => { seedDemo(); save(); render(); toast('Dados DEMO criados'); },
     wipe: () => { if (confirm('Apagar TODOS os dados deste aparelho? Faça backup antes.') && confirm('Tem certeza? Não dá para desfazer.')) { const me = S.me; S = defaultState(); S.me = me; saveNow(); render(); toast('Tudo apagado'); } },
     print: () => window.print(),
+    themeToggle: () => { S.settings.theme = isDark() ? 'light' : 'dark'; applyTheme(); save(); render(); },
     presGo: () => { ui.presMonth = Math.min(12, Math.max(1, +d.n)); renderPresMonth(); },
     more: () => { $('#moreSheet').hidden = !$('#moreSheet').hidden; },
   };
@@ -880,6 +885,9 @@ function boot() {
   $('#scrim').addEventListener('click', closePanel);
   $('#modal').addEventListener('click', (e) => { if (e.target.id === 'modal') closeModal(); });
   $('#quickAdd').addEventListener('click', () => clinicForm());
+  $('#themeBtn').addEventListener('click', () => { S.settings.theme = isDark() ? 'light' : 'dark'; applyTheme(); save(); if (route.name === 'config') render(); });
+  matchMedia('(prefers-color-scheme: dark)').addEventListener?.('change', applyTheme);
+  applyTheme();
   window.addEventListener('hashchange', () => { closePanel(); $('#moreSheet').hidden = true; render(); $('.main').scrollTop = 0; });
   render();
   if ('serviceWorker' in navigator && location.protocol !== 'file:') navigator.serviceWorker.register('sw.js').catch(() => {});
