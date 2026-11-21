@@ -617,63 +617,141 @@ function renderPresMonth() {
     </article>`;
 }
 
-// ---------- Proposta comercial (PDF) ----------
+// ---------- Proposta comercial Roity + 24AGÁ ----------
+// Não mostra o ciclo de 12 meses em detalhe (o método fica protegido).
+const REF_VALUES = [
+  ['Estratégia e posicionamento', 750], ['Campanhas Meta', 1200], ['Criativos e roteiros', 900],
+  ['24AGÁ (atendimento 24 horas)', 450], ['Treinamento e retenção', 650], ['Duas reuniões e relatório', 550],
+];
+const PROP_FIELDS = ['title', 'responsible', 'date', 'validUntil', 'startDate', 'objective', 'difficulty', 'procedure', 'recommendation', 'media', 'price', 'setupFee', 'setupWaived', 'setupReason', 'showRef', 'status'];
+function newProposal(c) {
+  const today = todayStr();
+  return { id: uid(), title: 'Proposta', responsible: c.contact || '', date: today, validUntil: addDays(today, 10), startDate: c.startDate && c.startDate >= today ? c.startDate : addDays(today, 7),
+    objective: '', difficulty: '', procedure: '', recommendation: '', media: c.mediaBudget ?? null, price: c.price ?? 2500, setupFee: c.setupFee ?? 1500,
+    setupWaived: !!c.setupWaived, setupReason: c.setupReason || '', showRef: true, status: 'rascunho', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
+}
+function propTotals(p) {
+  const price = +p.price || 0; const setup = p.setupWaived ? 0 : (+p.setupFee || 0); const media = p.media == null || p.media === '' ? null : +p.media;
+  const roity1 = price + setup;
+  return { price, setup, media, roity1, plat: media, first: roity1 + (media || 0), roityN: price, next: price + (media || 0) };
+}
+const blank = (v, ph) => (v && String(v).trim() ? esc(v) : `<span class="ph">[${ph}]</span>`);
+function proposalDoc(c, p) {
+  const t = propTotals(p); const refSum = REF_VALUES.reduce((a, r) => a + r[1], 0);
+  const mediaTxt = t.media == null ? 'definida na reunião' : money(t.media);
+  return `
+    <article class="report proposal">
+      <div class="r-band"><img class="r-logo" src="icons/logo-white.png" alt="ROITY"><div><b>Proposta Comercial</b><small>ROITY + 24AGÁ</small></div></div>
+      <div class="r-red"></div>
+      <div class="r-body">
+        <div class="r-eyebrow">PROPOSTA COMERCIAL · ${fmtDate(p.date, { day: '2-digit', month: 'long', year: 'numeric' }).toUpperCase()}</div>
+        <h1 class="p-title">Proposta para<br><em>${esc(c.name)}</em></h1>
+        ${p.responsible ? `<p class="p-to">A/C <b>${esc(p.responsible)}</b></p>` : ''}
+        <div class="r-stats"><div class="hero"><span>MENSALIDADE</span><b>${money(t.price)}</b></div><div><span>INÍCIO PREVISTO</span><b>${fmtDate(p.startDate)}</b></div><div><span>VÁLIDA ATÉ</span><b>${fmtDate(p.validUntil)}</b></div></div>
+
+        <h2><span class="r-badge">01</span>O que entendemos</h2>
+        <p>Na nossa reunião, você me contou que a prioridade da clínica é <b>${blank(p.objective, 'objetivo da clínica')}</b> e a principal dificuldade hoje é <b>${blank(p.difficulty, 'principal dificuldade')}</b>.</p>
+        <p>A Roity começa por <b>${blank(p.procedure, 'procedimento prioritário')}</b>, com foco em <b>${blank(p.recommendation, 'recomendação da Roity')}</b>.</p>
+
+        <h2><span class="r-badge">02</span>O que está incluído</h2>
+        <p>A mensalidade reúne <b>estratégia, execução e tecnologia</b> em um só lugar. O método MBCR (Marketing, Branding, Conversão e Retenção) já está pronto e é aplicado mês a mês pela Roity na sua clínica.</p>
+        <ul class="p-list">${MONTHLY.map(([a, d]) => `<li><b>${a}</b> — ${d}</li>`).join('')}</ul>
+        ${p.showRef ? `<table class="tbl p-inv p-ref"><thead><tr><th>Valores de referência das entregas</th><th>R$/mês</th></tr></thead><tbody>
+          ${REF_VALUES.map(([a, v]) => `<tr><td>${a}</td><td>${money(v)}</td></tr>`).join('')}
+          <tr class="sub"><td>Referência das entregas</td><td><s>${money(refSum)}</s></td></tr>
+          <tr class="tot"><td>Mensalidade do pacote Roity</td><td>${money(t.price)}</td></tr></tbody></table>` : ''}
+
+        <h2><span class="r-badge">03</span>Implantação da 24AGÁ</h2>
+        <p>Configuramos as informações da clínica, os serviços, as perguntas frequentes e as mensagens. Testamos o fluxo completo antes de ativar.</p>
+        <div class="p-split"><div><b>A 24AGÁ faz</b><span>Atende 24 horas, qualifica, faz follow-up e encaminha para a sua equipe.</span></div><div><b>Sua equipe faz</b><span>Confirma horários, fecha as vendas e registra os resultados.</span></div></div>
+
+        <h2><span class="r-badge">04</span>Por que a Roity</h2>
+        <div class="p-cmp">
+          <div><small>EQUIPE PRÓPRIA</small><p>Some as horas de cada função e o custo das ferramentas: estrategista, gestor de tráfego, editor, atendimento e treinamento.</p></div>
+          <div><small>OUTRA EMPRESA</small><p>Confira o escopo e a operação: muitas entregam só anúncios ou só conteúdo, sem atendimento e sem treinamento.</p></div>
+          <div class="win"><small>ROITY</small><p>Tudo sob <b>uma coordenação</b>: estratégia, anúncios, criativos, 24AGÁ e treinamento, com <b>duas reuniões por mês</b> e acompanhamento.</p></div>
+        </div>
+
+        <h2><span class="r-badge">05</span>Investimento</h2>
+        <table class="tbl p-inv"><tbody>
+          <tr><td>Mensalidade Roity</td><td><b>${money(t.price)}/mês</b></td></tr>
+          <tr><td>Implantação (pagamento único)</td><td><b>${p.setupWaived ? `<s>${money(+p.setupFee || 0)}</s> Isenta` : money(t.setup)}</b>${p.setupWaived && p.setupReason ? `<br><small>${esc(p.setupReason)}</small>` : ''}</td></tr>
+          <tr><td>Verba de anúncios (paga direto à plataforma)</td><td><b>${t.media == null ? 'Definida na reunião' : money(t.media) + '/mês'}</b></td></tr>
+        </tbody></table>
+        <div class="p-totals">
+          <div><small>1º MÊS</small><b>${money(t.first)}</b><span>Roity: ${money(t.roity1)}</span><span>Plataforma: ${mediaTxt}</span></div>
+          <div><small>MESES SEGUINTES</small><b>${money(t.next)}</b><span>Roity: ${money(t.roityN)}</span><span>Plataforma: ${mediaTxt}</span></div>
+        </div>
+        ${t.media == null ? '<p class="hint">Os totais acima não incluem a verba de anúncios, que será definida na reunião.</p>' : ''}
+        <p class="hint">A verba de anúncios é investida diretamente na plataforma (Meta), em nome da clínica, e não é receita da Roity.</p>
+
+        <div class="p-valid">Se estiver de acordo com o escopo e investimento, confirme com a Roity para receber o contrato e combinar a reunião de implantação.<br><small>Proposta válida até ${fmtDate(p.validUntil)}.</small></div>
+        <footer class="r-foot"><span><b>${esc(c.name).toUpperCase()}</b> · PROPOSTA COMERCIAL</span><span>ROITY + 24AGÁ</span></footer>
+      </div>
+    </article>`;
+}
+function propFileName(c, p) { return `Proposta Roity - ${c.name} - ${fmtDate(p.date).replace(/\//g, '-')}`; }
+
 VIEWS.proposta = () => {
   const c = clinicById(route.params[0]);
   if (!c) { view().innerHTML = empty('Clínica não encontrada.'); return; }
-  const today = todayStr(); const valid = addDays(today, 10);
-  const start = c.startDate || today;
-  const setup = c.setupWaived ? `Isenta${c.setupReason ? ' — ' + esc(c.setupReason) : ''}` : money(c.setupFee ?? 1500);
+  c.proposals = c.proposals || [];
+  const p = route.params[1] ? c.proposals.find((x) => x.id === route.params[1]) : null;
+  if (!p) {
+    const list = [...c.proposals].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+    view().innerHTML = `
+      <div class="page-h"><a class="back" href="#/clinica/${c.id}">← ${esc(c.name)}</a><button class="btn primary" data-act="propNew" data-c="${c.id}">+ Nova proposta</button></div>
+      <section class="card"><header><h3>Propostas de ${esc(c.name)}</h3></header>
+        ${list.length ? `<ul class="tlist">${list.map((x) => { const t = propTotals(x); return `<li class="trow"><a class="trow-b" href="#/proposta/${c.id}/${x.id}">
+          <span class="trow-t">${esc(x.title || 'Proposta')} · ${fmtDate(x.date)}</span><span class="trow-s">${x.status === 'enviada' ? 'Enviada' : 'Rascunho'} · 1º mês ${money(t.first)} · válida até ${fmtDate(x.validUntil)}</span></a>
+          <button class="btn sm" data-act="propDup" data-c="${c.id}" data-id="${x.id}">Duplicar</button></li>`; }).join('')}</ul>` : empty('Nenhuma proposta ainda. Crie a primeira.')}
+      </section>`;
+    return;
+  }
+  const f = (k, label, type = 'text', extra = '') => `<label><span>${label}</span><input type="${type}" data-pf="${k}" value="${esc(p[k] ?? '')}" ${extra}></label>`;
+  const ta = (k, label, ph) => `<label class="full"><span>${label}</span><textarea data-pf="${k}" rows="2" placeholder="${ph}">${esc(p[k] || '')}</textarea></label>`;
   view().innerHTML = `
-    <div class="noprint page-h"><a class="back" href="#/clinica/${c.id}">← ${esc(c.name)}</a>
-      <div class="btns"><a class="btn" href="#/apresentar" data-act="presFor" data-id="${c.id}">Abrir apresentação</a><button class="btn primary" data-act="print">Salvar PDF / Imprimir</button></div></div>
-    <article class="report proposal">
-      <div class="r-band"><img class="r-logo" src="icons/logo-white.png" alt="ROITY"><div><b>Proposta comercial</b><small>MÉTODO MBCR · 12 MESES</small></div></div>
-      <div class="r-red"></div>
-      <div class="r-body">
-        <div class="r-eyebrow">PROPOSTA COMERCIAL · ${fmtDate(today, { month: 'long', year: 'numeric' }).toUpperCase()}</div>
-        <h1 class="p-title">Plano de crescimento para<br><em>${esc(c.name)}</em></h1>
-        <p>Nós assumimos o crescimento comercial da sua clínica com estratégia, processo e atendimento 24 horas, por meio do método MBCR: Marketing, Branding, Conversão e Retenção.</p>
-        <div class="r-stats"><div class="hero"><span>INVESTIMENTO MENSAL</span><b>${money(c.price ?? 2500)}</b></div><div><span>DURAÇÃO</span><b>12 meses</b></div><div><span>INÍCIO PREVISTO</span><b>${fmtDate(start)}</b></div></div>
-
-        <h2><span class="r-badge">01</span>Os 4 pilares do método</h2>
-        <div class="p-pillars">${Object.values(PILLARS).map((p) => `<div><b>${p.name}</b><span>${PILLAR_DESC[p.key]}</span></div>`).join('')}</div>
-
-        <h2><span class="r-badge">02</span>Sua jornada de 12 meses</h2>
-        <table class="tbl p-tbl"><thead><tr><th>Mês</th><th>Foco</th><th>O que fazemos</th></tr></thead><tbody>
-          ${MONTHS.map((m) => `<tr><td><b>${m.n}</b><br><small class="nowrap">${(() => { const d = addMonths(start, m.n - 1); return fmtDate(d, { month: 'short' }).replace('.', '') + '/' + d.slice(2, 4); })()}</small></td><td><b>${esc(m.title)}</b></td><td>${m.items.map((i) => esc(clientTitle(i.t))).join(' · ')}</td></tr>`).join('')}
-        </tbody></table>
-
-        <h2><span class="r-badge">03</span>Todo mês, sem parar</h2>
-        <ul class="p-list">${MONTHLY.map(([t, d]) => `<li><b>${t}</b> — ${d}</li>`).join('')}</ul>
-
-        <h2><span class="r-badge">04</span>Investimento</h2>
-        <table class="tbl p-inv"><tbody>
-          <tr><td>Assessoria Roity (mensal)</td><td><b>${money(c.price ?? 2500)}</b></td></tr>
-          <tr><td>Implantação (única)</td><td><b>${setup}</b></td></tr>
-          <tr><td>Verba de anúncios (paga pela clínica direto à plataforma)</td><td><b>${c.mediaBudget ? money(c.mediaBudget) + '/mês sugerido' : 'R$ 2.500 a R$ 4.000/mês, conforme diagnóstico'}</b></td></tr>
-          <tr><td>Duração</td><td><b>12 meses · 1º ciclo de 6 meses</b></td></tr>
-        </tbody></table>
-        <p class="hint">A verba de anúncios não é receita da Roity: é investida diretamente na plataforma (Meta) em nome da clínica.</p>
-
-        <h2><span class="r-badge">05</span>Condições</h2>
-        <ul class="p-list">
-          <li><b>Metas individuais</b> definidas no diagnóstico do 1º mês, com base no faturamento atual da clínica.</li>
-          <li><b>Fechamento humano:</b> a 24AGÁ atende, qualifica e faz follow-up; a confirmação de agendamentos e o fechamento são sempre da equipe da clínica.</li>
-          <li><b>Criativos:</b> até 6 por mês; a clínica grava os vídeos com nossos roteiros e orientações.</li>
-          <li><b>Reuniões:</b> 2 por mês, de 1 hora, com pauta e ata.</li>
-          ${c.exclusivity && c.exclusivity !== 'nao_solicitada' ? `<li><b>Exclusividade territorial</b> (${esc(c.territory || 'área a definir')}): sujeita a análise e aprovação formal no contrato.</li>` : ''}
-          <li>Garantias, cancelamento e demais condições conforme <b>contrato assinado</b>.</li>
-        </ul>
-
-        <h2><span class="r-badge">06</span>Próximos passos</h2>
-        <ol><li>Aceite desta proposta.</li><li>Assinatura do contrato.</li><li>Liberação dos acessos (Instagram, Meta e WhatsApp).</li><li>Reunião de diagnóstico e início da jornada.</li></ol>
-
-        <div class="p-valid">Proposta válida até <b>${fmtDate(valid)}</b>.</div>
-        <footer class="r-foot"><span><b>${esc(c.name).toUpperCase()}</b> · PROPOSTA COMERCIAL</span><span>ROITY · MÉTODO MBCR</span></footer>
-      </div>
-    </article>`;
+    <div class="noprint page-h"><a class="back" href="#/proposta/${c.id}">← Propostas de ${esc(c.name)}</a>
+      <div class="btns"><button class="btn sm" data-act="propDup" data-c="${c.id}" data-id="${p.id}">Duplicar</button><button class="btn sm danger" data-act="propDel" data-c="${c.id}" data-id="${p.id}">Excluir</button><button class="btn primary" data-act="propPrint" data-c="${c.id}" data-id="${p.id}">Gerar PDF</button></div></div>
+    <div class="seg prop-tabs noprint"><button aria-selected="${ui.propTab !== 'previa'}" data-act="propTab" data-t="editar">Editar</button><button aria-selected="${ui.propTab === 'previa'}" data-act="propTab" data-t="previa">Prévia</button></div>
+    <div class="prop-wrap tab-${ui.propTab === 'previa' ? 'previa' : 'editar'}">
+      <form class="mform prop-form noprint card" onsubmit="return false">
+        <h3 class="full">Dados da proposta <small class="muted" id="propSaved">salvo automaticamente</small></h3>
+        ${f('title', 'Nome do rascunho')}
+        <label><span>Situação</span><select data-pf="status">${opt([['rascunho', 'Rascunho'], ['enviada', 'Enviada']], p.status)}</select></label>
+        ${f('responsible', 'Responsável na clínica')}
+        ${f('date', 'Data', 'date')}
+        ${f('validUntil', 'Validade', 'date')}
+        ${f('startDate', 'Início previsto', 'date')}
+        ${ta('objective', 'Objetivo da clínica (prioridade)', 'Ex.: aumentar pacientes de harmonização facial')}
+        ${ta('difficulty', 'Principal dificuldade', 'Ex.: muitos contatos e poucos fechamentos')}
+        ${ta('procedure', 'Procedimento prioritário', 'Ex.: lentes de contato dental')}
+        ${ta('recommendation', 'Recomendação da Roity (foco)', 'Ex.: campanhas para avaliação e treinamento da recepção')}
+        ${f('media', 'Verba de anúncios/mês (R$) — vazio = definir na reunião', 'number', 'inputmode="decimal" min="0"')}
+        ${f('price', 'Mensalidade (R$)', 'number', 'inputmode="decimal" min="0"')}
+        ${f('setupFee', 'Implantação (R$)', 'number', 'inputmode="decimal" min="0"')}
+        <label class="chkl"><input type="checkbox" data-pf="setupWaived" ${p.setupWaived ? 'checked' : ''}> Isentar implantação</label>
+        ${f('setupReason', 'Motivo da isenção (aparece na proposta)')}
+        <label class="chkl full"><input type="checkbox" data-pf="showRef" ${p.showRef ? 'checked' : ''}> Mostrar tabela de valores de referência</label>
+        <div class="full prop-sum" id="propSum"></div>
+      </form>
+      <div class="prop-preview" id="propPreview">${proposalDoc(c, p)}</div>
+    </div>`;
+  renderPropSum(p);
 };
+function renderPropSum(p) {
+  const t = propTotals(p); const el = $('#propSum'); if (!el) return;
+  el.innerHTML = `<b>Conferência:</b> 1º mês ${money(t.first)} (Roity ${money(t.roity1)}${t.media != null ? ` + plataforma ${money(t.media)}` : ''}) · Seguintes ${money(t.next)} (Roity ${money(t.roityN)}${t.media != null ? ` + plataforma ${money(t.media)}` : ''})`;
+}
+function propUpdate(el) {
+  const [, cid, pid] = route.params.length ? ['', route.params[0], route.params[1]] : [];
+  const c = clinicById(cid); const p = c && (c.proposals || []).find((x) => x.id === pid); if (!p) return;
+  const k = el.dataset.pf; let v = el.type === 'checkbox' ? el.checked : el.value;
+  if (['media', 'price', 'setupFee'].includes(k)) v = v === '' ? null : Number(v);
+  p[k] = v; p.updatedAt = new Date().toISOString(); save();
+  $('#propPreview').innerHTML = proposalDoc(c, p); renderPropSum(p);
+  const s = $('#propSaved'); if (s) { s.textContent = 'salvo ✓'; clearTimeout(s._t); s._t = setTimeout(() => (s.textContent = 'salvo automaticamente'), 1200); }
+}
 
 // ---------- Financeiro ----------
 VIEWS.financeiro = () => {
@@ -882,6 +960,11 @@ document.addEventListener('click', (e) => {
     calNav: () => { if (+d.d === 0) { ui.calMonth = null; ui.calDay = null; } else { const b = (ui.calMonth || todayStr().slice(0, 7)) + '-01'; ui.calMonth = addMonths(b, +d.d).slice(0, 7); } render(); },
     crRev: () => { const x = S.creatives.find((y) => y.id === d.id); x.reviews++; if (x.reviews > S.settings.reviewLimit) toast('Acima do limite de revisões combinado'); rerender(); },
     presFor: () => { ui.presClinic = d.id; },
+    propNew: () => { const c = clinicById(d.c); c.proposals = c.proposals || []; const p = newProposal(c); c.proposals.push(p); log(`Criou proposta para ${c.name}`, c.id); saveNow(); ui.propTab = 'editar'; go(`#/proposta/${c.id}/${p.id}`); },
+    propDup: () => { const c = clinicById(d.c); const o = c.proposals.find((x) => x.id === d.id); const p = { ...JSON.parse(JSON.stringify(o)), id: uid(), title: (o.title || 'Proposta') + ' (cópia)', date: todayStr(), validUntil: addDays(todayStr(), 10), status: 'rascunho', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() }; c.proposals.push(p); log(`Duplicou proposta de ${c.name}`, c.id); saveNow(); toast('Proposta duplicada'); go(`#/proposta/${c.id}/${p.id}`); },
+    propDel: () => { const c = clinicById(d.c); if (!confirm('Excluir esta proposta?')) return; c.proposals = c.proposals.filter((x) => x.id !== d.id); saveNow(); go(`#/proposta/${c.id}`); },
+    propTab: () => { ui.propTab = d.t; $('.prop-wrap').className = 'prop-wrap tab-' + d.t; $$('.prop-tabs button').forEach((b) => b.setAttribute('aria-selected', b.dataset.t === d.t)); },
+    propPrint: () => { const c = clinicById(d.c); const p = c.proposals.find((x) => x.id === d.id); const old = document.title; document.title = propFileName(c, p); const back = () => { document.title = old; removeEventListener('afterprint', back); }; addEventListener('afterprint', back); log(`Gerou PDF da proposta de ${c.name}`, c.id); save(); window.print(); setTimeout(back, 3000); },
     openToday: () => { ui.clinicTab = 'hoje'; ui.lastClinic = d.id; },
     goCr: () => { ui.crClinic = d.c; ui.crMonth = d.n; closePanel(); go('#/criativos'); },
     newCamp: () => campForm(d.c),
@@ -943,6 +1026,7 @@ document.addEventListener('click', (e) => {
 });
 let tqTimer;
 document.addEventListener('input', (e) => {
+  if (e.target.dataset && e.target.dataset.pf) { propUpdate(e.target); return; }
   if (e.target.dataset.act === 'tq') { clearTimeout(tqTimer); const v = e.target.value; tqTimer = setTimeout(() => { ui.taskQuery = v; render(); const i = $('[data-act="tq"]'); i.focus(); i.setSelectionRange(v.length, v.length); }, 250); }
 });
 
