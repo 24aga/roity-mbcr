@@ -822,14 +822,15 @@ VIEWS.config = () => {
           <p class="hint">Repositório privado: <b>${esc(Sync.cfg().repo)}</b>. Tudo que você muda aqui aparece nos outros aparelhos conectados em poucos segundos (ao abrir o app ou voltar para ele).</p>
           <div class="btns"><button class="btn primary" data-act="syncNow">Sincronizar agora</button><button class="btn danger" data-act="syncOff">Desconectar este aparelho</button></div>`
         : `<p>Hoje os dados ficam só neste aparelho. Conecte <b>uma vez em cada aparelho</b> para o PC e o celular mostrarem sempre a mesma coisa. Os dados ficam no seu repositório <b>privado</b> do GitHub (${esc(SYNC_DEFAULT.repo)}).</p>
-          <ol class="steps">
-            <li>Abra <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener">github.com → Fine-grained token</a> (entre na sua conta se pedir).</li>
-            <li><b>Token name:</b> Roity MBCR · <b>Expiration:</b> a maior disponível.</li>
-            <li><b>Repository access:</b> <i>Only select repositories</i> → escolha <b>roity-mbcr-dados</b>.</li>
-            <li><b>Permissions → Repository permissions → Contents:</b> <i>Read and write</i>.</li>
-            <li>Toque em <b>Generate token</b>, copie e cole abaixo.</li>
-          </ol>
-          <form class="addrow" data-form="syncConnect"><input type="password" name="token" placeholder="Cole o token aqui (github_pat_…)" autocomplete="off" required aria-label="Token do GitHub"><button class="btn primary">Conectar</button></form>
+          <div class="sync-steps">
+            <div class="ss"><span>1</span><div><b>Crie a chave no GitHub</b><p>O botão abre a página já preenchida. Entre na sua conta do GitHub se ele pedir.</p>
+              <a class="btn primary" href="https://github.com/settings/personal-access-tokens/new?name=Roity+MBCR&description=Sincronizacao+do+app+Roity+MBCR&expires_in=none&contents=write" target="_blank" rel="noopener">Abrir GitHub</a></div></div>
+            <div class="ss"><span>2</span><div><b>Escolha o repositório</b><p>Na página, em <b>Repository access</b>, marque <b>Only select repositories</b> e escolha <b>roity-mbcr-dados</b>. O resto já vem certo.</p></div></div>
+            <div class="ss"><span>3</span><div><b>Gere e copie</b><p>Desça até o fim e toque em <b>Generate token</b> (e confirme). Depois toque no ícone de copiar ao lado do código que começa com <b>github_pat_</b>.</p></div></div>
+            <div class="ss"><span>4</span><div><b>Cole aqui e conecte</b>
+              <form class="addrow" data-form="syncConnect"><input type="password" name="token" placeholder="Cole o código aqui" autocomplete="off" required aria-label="Chave do GitHub"><button type="button" class="btn" data-act="pasteToken">Colar</button><button class="btn primary">Conectar</button></form></div></div>
+          </div>
+          <p class="hint">Guarde esse código (ex.: nas Notas) para colar também no celular. Use o <b>mesmo código</b> nos dois aparelhos.</p>
           <p class="hint">Conecte primeiro no aparelho que tem os dados certos (ex.: o PC) e escolha enviar os dados dele. Depois conecte o celular e escolha usar os dados da nuvem. O token fica salvo só neste aparelho e não vai no backup.</p>`}
       </section>
       <section class="card"><header><h3>Dados</h3></header>
@@ -1025,6 +1026,7 @@ document.addEventListener('click', (e) => {
     addDemo: () => { seedDemo(); save(); render(); toast('Dados DEMO criados'); },
     wipe: () => { if (confirm('Apagar TODOS os dados deste aparelho? Faça backup antes.') && confirm('Tem certeza? Não dá para desfazer.')) { const me = S.me; S = defaultState(); S.me = me; saveNow(); render(); toast('Tudo apagado'); } },
     print: () => window.print(),
+    pasteToken: async () => { try { const t = await navigator.clipboard.readText(); $('[data-form=syncConnect] [name=token]').value = t.trim(); toast('Código colado'); } catch (e) { toast('Toque no campo e use Colar do teclado'); } },
     syncNow: () => { Sync.setMeta({}); Sync.meta().dirty ? Sync.push() : Sync.pull(); },
     syncOff: () => { if (confirm('Desconectar a sincronização neste aparelho? Os dados continuam aqui, só param de sincronizar.')) { Sync.disconnect(); render(); } },
     themeToggle: () => { S.settings.theme = isDark() ? 'light' : 'dark'; applyTheme(); save(); render(); },
