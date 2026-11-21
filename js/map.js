@@ -210,7 +210,7 @@ class MindMap {
       let sub = '', stk = 'tpl';
       if (it.output) sub = 'Entrega verificável';
       else if (this.o.clinic) { const s = taskStatusLabel(it); stk = s.k; sub = `Dia ${this.o.dayOf(it)} · ${it.owner} · ${fmtShort(it.due)} · ${s.l}`; if (it.checklist && it.checklist.length) sub += ` · ☑ ${it.checklist.filter((c) => c.done).length}/${it.checklist.length}`; }
-      else sub = `Dia ${it.d || ''} · ${it.owner || ''} · ${PILLARS[it.pillar]?.name || ''}`;
+      else sub = this.o.present ? `Dia ${it.d || ''} · ${PILLARS[it.pillar]?.name || ''}` : `Dia ${it.d || ''} · ${it.owner || ''} · ${PILLARS[it.pillar]?.name || ''}`;
       const mark = { concluido: '✓', atrasado: '!', bloqueado: '■', andamento: '◐', a_fazer: '○', tpl: '•' }[stk] || '•';
       return `<g class="mm-node leaf st-${stk}${hit ? ' hit' : ''}${this.query && !hit ? ' dim' : ''}" data-node="leaf" data-kind="${nd.row.kind}" data-i="${nd.row.i}" ${it.id ? `data-task="${it.id}"` : ''}
           tabindex="0" role="button" aria-label="${esc(it.title)}. ${esc(sub)}" transform="translate(${nd.x - w / 2},${nd.y - LH / 2})">

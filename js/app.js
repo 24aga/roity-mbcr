@@ -22,8 +22,8 @@ const ui = { mapClinic: null, mapMode: 'mapa', taskFilter: 'semana', taskOwner: 
 // ================= roteamento =================
 const NAV = [
   ['visao', 'Visão geral', '◧'], ['mapa', 'Mapa MBCR', '✳'], ['clinicas', 'Clínicas', '⌂'], ['tarefas', 'Tarefas', '☑'],
-  ['calendario', 'Calendário', '▦'], ['criativos', 'Campanhas e Criativos', '✎'], ['aga', '24AGÁ', '◎'],
-  ['resultados', 'Resultados', '↗'], ['financeiro', 'Financeiro', 'R$'], ['config', 'Configurações', '⚙'],
+  ['calendario', 'Calendário', '▦'], ['criativos', 'Criativos', '✎'], ['apresentar', 'Apresentar ao cliente', '▶'],
+  ['financeiro', 'Financeiro', 'R$'], ['config', 'Configurações', '⚙'],
 ];
 function parseRoute() {
   const h = location.hash.replace(/^#\/?/, '') || 'visao';
@@ -35,9 +35,10 @@ function render() {
   parseRoute();
   if (mm && !(route.name === 'mapa' && ui.mapMode === 'mapa')) { mm.destroy(); mm = null; }
   const fn = VIEWS[route.name] || VIEWS.visao;
-  const navKey = route.name === 'clinica' ? 'clinicas' : route.name === 'relatorio' ? 'resultados' : route.name;
+  const navKey = route.name === 'clinica' ? 'clinicas' : route.name === 'relatorio' ? 'clinicas' : route.name;
   $$('[data-nav]').forEach((a) => a.classList.toggle('active', a.dataset.nav === navKey));
   document.body.dataset.route = route.name;
+  document.body.classList.remove('present');
   const title = (NAV.find((n) => n[0] === navKey) || [0, 'Roity'])[1];
   $('#topTitle').textContent = title;
   fn();
@@ -152,11 +153,6 @@ function buildAlerts() {
   for (const c of S.clinics) {
     if (c.journey && ['ativo', 'onboarding'].includes(c.stage)) {
       const n = currentMonth(c);
-      if (n > 1 && n <= 13) {
-        const prev = Math.min(12, n - 1);
-        const m = S.metrics.find((x) => x.clinicId === c.id && x.month === prev);
-        if (!m) out.push({ k: 'info', t: `${c.name}: métricas do mês ${prev} não informadas`, d: `<a href="#/resultados" data-act="res" data-c="${c.id}" data-m="${prev}">Lançar resultados</a>` });
-      }
       const bl = S.tasks.filter((t) => t.clinicId === c.id && t.status === 'bloqueado');
       if (bl.length) out.push({ k: 'warn', t: `${c.name}: ${bl.length} tarefa(s) bloqueada(s)`, d: bl.slice(0, 2).map((t) => esc(t.title)).join(' · ') });
       if (n === 6 || n === 5) out.push({ k: 'warn', t: `${c.name}: avaliação do 1º ciclo se aproxima`, d: 'Garantia só conforme termos assinados e revisão humana/jurídica.' });
@@ -319,7 +315,7 @@ VIEWS.clinica = () => {
         <p><b>Status:</b> ${{ nao_solicitada: 'Não solicitada', em_analise: 'Em análise (não prometer ainda)', aprovada: 'Aprovada formalmente', negada: 'Negada / renegociar' }[c.exclusivity] || '—'}</p>
         ${conf.length ? `<div class="notice warn">Possível conflito com: ${conf.map((x) => `<a href="#/clinica/${x.id}">${esc(x.name)}</a>`).join(', ')} (mesmo segmento e cidade). Verificar e decidir manualmente.</div>` : '<p class="hint">Nenhum conflito encontrado com clínicas ativas do mesmo segmento e cidade.</p>'}
       </section>
-      <section class="card"><header><h3>Resultados recentes</h3><a class="link" href="#/resultados" data-act="res" data-c="${c.id}">Lançar →</a></header>${metricsSummary(c)}</section>
+      <section class="card"><header><h3>Próximas entregas</h3><button class="btn sm" data-act="clinicTab" data-t="tarefas">Ver todas</button></header>${(() => { const l = S.tasks.filter((t) => t.clinicId === c.id && t.status !== 'concluido').sort((a, b) => a.due.localeCompare(b.due)).slice(0, 6); return l.length ? `<ul class="tlist">${l.map((t) => taskRow(t, { day: true })).join('')}</ul>` : empty('Nenhuma entrega pendente.'); })()}</section>
     </div>`;
   } else if (ui.clinicTab === 'jornada') {
     body = c.journey ? `<div class="mgrid">${MONTHS.map((m) => { const md = monthData(c, m.n); return `<button class="mcell st-${md.state.k} ${md.isCurrent ? 'current' : ''}" data-act="month" data-c="${c.id}" data-n="${m.n}" style="--pc:${PILLARS[md.pillars[0]].color}">
@@ -352,14 +348,6 @@ const logItem = (x) => `<li><time>${new Date(x.at).toLocaleString('pt-BR', { tim
 function conflictsFor(c) {
   const norm = (s) => (s || '').trim().toLowerCase();
   return S.clinics.filter((o) => o.id !== c.id && ['ativo', 'onboarding', 'negociacao'].includes(o.stage) && o.segment === c.segment && norm(o.city) && norm(o.city) === norm(c.city));
-}
-function metricsSummary(c) {
-  const ms = S.metrics.filter((m) => m.clinicId === c.id).sort((a, b) => b.month - a.month).slice(0, 3);
-  if (!ms.length) return empty('Nenhum resultado lançado ainda.');
-  return `<table class="tbl"><thead><tr><th>Mês</th><th>Mídia</th><th>Leads</th><th>Pagantes</th><th>CPL</th><th>CAC mídia</th></tr></thead><tbody>${ms.map((m) => {
-    const k = calcMetrics(m);
-    return `<tr><td>${m.month}</td><td>${money(m.media)}</td><td>${m.leads ?? 'não informado'}</td><td>${m.paying ?? 'não informado'}</td><td>${money(k.cpl)}</td><td>${money(k.cacMedia)}</td></tr>`;
-  }).join('')}</tbody></table>`;
 }
 
 // ---------- Tarefas ----------
@@ -453,95 +441,111 @@ VIEWS.criativos = () => {
       <p class="hint">Integração Meta Ads não está ativa — registros manuais.</p></section>`;
 };
 
-// ---------- 24AGÁ ----------
-VIEWS.aga = () => {
-  const cl = journeyClinics();
-  view().innerHTML = `
-    <div class="notice warn"><b>Integração 24AGÁ não configurada.</b> Nenhum dado chega automaticamente — sem API/webhook documentados ainda. Os números abaixo vêm do que você lança em Resultados.</div>
-    <p class="muted">Funil: novo contato → qualificado → encaminhado para humano → agendamento solicitado → <b>confirmado por humano</b> → compareceu → paciente pagante. Fechamento e confirmação são sempre humanos.</p>
-    ${cl.length ? cl.map((c) => {
-      const impl = S.tasks.filter((t) => t.clinicId === c.id && /24AG/i.test(t.title) && t.kind === 'novo');
-      const st = groupState(impl);
-      const m = S.metrics.filter((x) => x.clinicId === c.id).sort((a, b) => b.month - a.month)[0];
-      const steps = [['leads', 'Contatos'], ['qualified', 'Qualificados'], ['scheduled', 'Agend. solicitados'], ['confirmed', 'Confirmados (humano)'], ['attended', 'Compareceram'], ['paying', 'Pagantes']];
-      const max = m ? Math.max(1, ...steps.map(([k]) => +m[k] || 0)) : 1;
-      return `<section class="card"><header><h3>${esc(c.name)}${demoBadge(c)}</h3>${pill(st.k, 'Implantação: ' + st.l + ' · ' + st.done + '/' + st.total)}</header>
-        ${m ? `<p class="hint">Mês ${m.month} · fonte: ${esc(m.source || 'manual')}</p><div class="funnel">${steps.map(([k, l]) => `<div class="fr"><span>${l}</span><div class="fb"><i style="width:${m[k] == null ? 0 : ((+m[k]) / max) * 100}%"></i></div><b>${m[k] ?? 'não informado'}</b></div>`).join('')}</div>` : empty('Sem resultados lançados.')}</section>`;
-    }).join('') : empty('Nenhuma clínica com jornada.')}`;
-};
-
-// ---------- Resultados ----------
-const MFIELDS = [
-  ['media', 'Investimento em mídia (R$)'], ['leads', 'Leads / contatos'], ['qualified', 'Leads qualificados'], ['scheduled', 'Agendamentos solicitados'],
-  ['confirmed', 'Confirmados por humano'], ['attended', 'Comparecimentos'], ['paying', 'Novos pacientes pagantes'],
-  ['attributedRevenue', 'Faturamento atribuído (R$)'], ['clinicRevenue', 'Faturamento total da clínica (R$)'],
-];
-VIEWS.resultados = () => {
-  const cl = journeyClinics();
-  if (!cl.length) { view().innerHTML = empty('Inicie a jornada de uma clínica para lançar resultados.'); return; }
-  const c = clinicById(ui.resClinic) || cl[0]; ui.resClinic = c.id;
-  const cur = Math.min(12, Math.max(1, currentMonth(c)));
-  const mN = ui.resMonth || Math.max(1, cur - 1 || 1);
-  const m = S.metrics.find((x) => x.clinicId === c.id && x.month === mN) || {};
-  const k = calcMetrics(m);
-  const all = S.metrics.filter((x) => x.clinicId === c.id).sort((a, b) => a.month - b.month);
-  view().innerHTML = `
-    <div class="filters">
-      <select data-act="resClinic" aria-label="Clínica">${cl.map((x) => `<option value="${x.id}"${x.id === c.id ? ' selected' : ''}>${esc(x.name)}</option>`).join('')}</select>
-      <select data-act="resMonth" aria-label="Mês">${MONTHS.map((x) => `<option value="${x.n}"${x.n === mN ? ' selected' : ''}>Mês ${x.n}</option>`).join('')}</select>
-      <a class="btn sm" href="#/relatorio/${c.id}/${mN}">Relatório do mês ${mN} (PDF)</a>
-    </div>
-    <div class="grid2">
-      <section class="card"><header><h3>Lançar mês ${mN}</h3><span class="muted">vazio = não informado</span></header>
-        <form class="mform" data-form="metrics" data-c="${c.id}" data-m="${mN}">
-          ${MFIELDS.map(([f, l]) => `<label><span>${l}</span><input type="number" inputmode="decimal" min="0" step="any" name="${f}" value="${m[f] ?? ''}" placeholder="não informado"></label>`).join('')}
-          <label><span>Fonte dos dados</span><input name="source" value="${esc(m.source || '')}" placeholder="Ex.: Meta Ads + CRM da clínica"></label>
-          <label><span>Confiabilidade</span><select name="confidence">${opt([['', '—'], ['alta', 'Alta'], ['media', 'Média'], ['baixa', 'Baixa']], m.confidence || '')}</select></label>
-          <button class="btn primary">Salvar resultados</button>
-        </form></section>
-      <section class="card"><header><h3>Indicadores calculados</h3></header>
-        <div class="kgrid">
-          <div><span>CPL</span><b>${money(k.cpl)}</b><small>mídia ÷ leads</small></div>
-          <div><span>CAC de mídia</span><b>${money(k.cacMedia)}</b><small>mídia ÷ pagantes</small></div>
-          <div><span>Taxa de fechamento</span><b>${pct(k.closeRate)}</b><small>pagantes ÷ ${k.closeBase}</small></div>
-          <div><span>Comparecimento</span><b>${pct(k.attendRate)}</b><small>compareceram ÷ confirmados</small></div>
-          <div><span>ROAS</span><b>${k.roas == null ? 'não informado' : k.roas.toLocaleString('pt-BR', { maximumFractionDigits: 2 }) + 'x'}</b><small>receita atribuída ÷ mídia</small></div>
-          <div><span>Confiabilidade</span><b>${{ alta: 'Alta', media: 'Média', baixa: 'Baixa' }[m.confidence] || 'não informado'}</b><small>${esc(m.source || 'fonte não informada')}</small></div>
-        </div>
-        <p class="hint">Valores ausentes aparecem como “não informado”, nunca como zero. Atribuição depende da qualidade dos registros da clínica.</p></section>
-    </div>
-    <section class="card"><header><h3>Histórico da jornada</h3></header>
-      ${all.length ? `<div class="tscroll"><table class="tbl"><thead><tr><th>Mês</th><th>Mídia</th><th>Leads</th><th>Pagantes</th><th>CPL</th><th>CAC</th><th>Fech.</th><th>Fat. clínica</th></tr></thead><tbody>${all.map((x) => { const kk = calcMetrics(x); return `<tr><td>${x.month}</td><td>${money(x.media)}</td><td>${x.leads ?? '—'}</td><td>${x.paying ?? '—'}</td><td>${money(kk.cpl)}</td><td>${money(kk.cacMedia)}</td><td>${pct(kk.closeRate)}</td><td>${money(x.clinicRevenue)}</td></tr>`; }).join('')}</tbody></table></div>
-      <p class="hint">Baseline (faturamento base no diagnóstico): ${money(c.baseRevenue)}</p>` : empty('Nenhum mês lançado.')}</section>`;
-};
-
 // ---------- Relatório (imprimir/PDF) ----------
 VIEWS.relatorio = () => {
   const c = clinicById(route.params[0]); const n = +route.params[1];
   if (!c || !c.journey) { view().innerHTML = empty('Relatório indisponível.'); return; }
-  const md = monthData(c, n); const m = S.metrics.find((x) => x.clinicId === c.id && x.month === n) || {}; const prev = S.metrics.find((x) => x.clinicId === c.id && x.month === n - 1);
-  const k = calcMetrics(m); const kp = prev ? calcMetrics(prev) : null;
+  const md = monthData(c, n);
   const done = md.tasks.filter((t) => t.status === 'concluido'); const pend = md.tasks.filter((t) => t.status !== 'concluido');
   const next = n < 12 ? monthData(c, n + 1) : null;
   const approved = (c.reports || {})[n];
   view().innerHTML = `
-    <div class="noprint page-h"><a class="back" href="#/resultados">← Resultados</a>
+    <div class="noprint page-h"><a class="back" href="#/clinica/${c.id}">← ${esc(c.name)}</a>
       <div class="btns"><label class="chkl"><input type="checkbox" data-act="approveReport" data-c="${c.id}" data-n="${n}" ${approved ? 'checked' : ''}> Revisado e aprovado por Tiago</label>
       <button class="btn primary" data-act="print">Salvar PDF / Imprimir</button></div></div>
     <article class="report">
       <header><div class="rlogo">ROITY · MBCR</div><h1>Relatório mensal — Mês ${n}</h1><p>${esc(c.name)} · ${fmtDate(monthStart(c, n))} a ${fmtDate(monthEnd(c, n))}</p>
         <p class="${approved ? '' : 'draft'}">${approved ? `Aprovado por ${esc(approved.who)} em ${fmtDate(approved.at.slice(0, 10))}` : 'RASCUNHO — aguardando revisão de Tiago antes do envio'}</p></header>
       <h2>${esc(md.title)}</h2><p>${esc(md.desc)}</p>
-      <h3>Indicadores</h3>
-      <table class="tbl"><thead><tr><th>Indicador</th><th>Mês ${n}</th><th>Mês anterior</th></tr></thead><tbody>
-        ${[['Investimento em mídia', money(m.media), prev ? money(prev.media) : '—'], ['Leads', m.leads ?? 'não informado', prev ? prev.leads ?? '—' : '—'], ['Agendamentos confirmados', m.confirmed ?? 'não informado', prev ? prev.confirmed ?? '—' : '—'], ['Comparecimentos', m.attended ?? 'não informado', prev ? prev.attended ?? '—' : '—'], ['Novos pacientes pagantes', m.paying ?? 'não informado', prev ? prev.paying ?? '—' : '—'], ['Faturamento atribuído', money(m.attributedRevenue), prev ? money(prev.attributedRevenue) : '—'], ['CPL', money(k.cpl), kp ? money(kp.cpl) : '—'], ['CAC de mídia', money(k.cacMedia), kp ? money(kp.cacMedia) : '—'], ['Taxa de fechamento', pct(k.closeRate), kp ? pct(kp.closeRate) : '—']].map((r) => `<tr><td>${r[0]}</td><td>${r[1]}</td><td>${r[2]}</td></tr>`).join('')}
-      </tbody></table>
-      <p class="hint">Baseline: faturamento base ${money(c.baseRevenue)}. Fonte: ${esc(m.source || 'não informada')}.</p>
       <h3>Ações executadas (${done.length})</h3><ul>${done.map((t) => `<li>${esc(t.title)}${t.evidence ? ` — <i>${esc(t.evidence)}</i>` : ''}</li>`).join('') || '<li>—</li>'}</ul>
       <h3>Pendências (${pend.length})</h3><ul>${pend.map((t) => `<li>${esc(t.title)} <small>(${esc(t.owner)} · ${statusName(t.status)})</small></li>`).join('') || '<li>Nenhuma</li>'}</ul>
       ${next ? `<h3>Próximos passos — Mês ${n + 1}: ${esc(next.title)}</h3><ul>${next.novo.map((t) => `<li>${esc(t.title)}</li>`).join('')}</ul>` : '<h3>Próximos passos</h3><p>Plano do próximo ciclo e proposta de renovação.</p>'}
     </article>`;
 };
+
+// ---------- Apresentar ao cliente (modo venda) ----------
+const PILLAR_DESC = {
+  M: 'Anúncios, ofertas e captação de novos pacientes.',
+  B: 'Posicionamento, Instagram, conteúdo e criativos.',
+  C: 'Atendimento, treinamento comercial e fechamento.',
+  R: 'Follow-up, reativação, retorno e indicações.',
+};
+const MONTHLY = [
+  ['Planejamento e gestão de marketing', 'Estratégia do mês definida e acompanhada.'],
+  ['Campanhas Meta Ads', 'Público, criativos, oferta e orçamento otimizados.'],
+  ['Até 6 criativos por mês', 'Vídeos curtos e imagens com roteiro, edição e identidade visual.'],
+  ['Calendário editorial', 'Temas e direcionamento de conteúdo do mês.'],
+  ['2 reuniões de 1 hora', 'Estratégia e resultados + treinamento comercial.'],
+  ['Atendimento 24AGÁ', 'Pré-atendimento, qualificação e follow-up 24 horas. Fechamento com sua equipe.'],
+  ['Treinamento comercial', 'Roteiros, materiais e propostas de atendimento.'],
+  ['Relatório mensal', 'Ações, investimento, resultados e próximos passos.'],
+];
+VIEWS.apresentar = () => {
+  document.body.classList.add('present');
+  const c = clinicById(ui.presClinic);
+  const n = ui.presMonth || 1;
+  view().innerHTML = `
+    <div class="pres-bar noprint">
+      <select data-act="presClinic" aria-label="Preparar para">
+        <option value="">Apresentação geral</option>${S.clinics.map((x) => `<option value="${x.id}"${c && x.id === c.id ? ' selected' : ''}>Para: ${esc(x.name)}</option>`).join('')}
+      </select>
+      <a class="btn sm" href="#/visao">Sair da apresentação</a>
+    </div>
+    <section class="pres-hero">
+      <div class="rlogo">ROITY · MÉTODO MBCR</div>
+      <h1>${c ? `Plano de crescimento para<br><em>${esc(c.name)}</em>` : 'Seus próximos 12 meses<br><em>de crescimento</em>'}</h1>
+      <p>Nós assumimos o crescimento comercial da sua clínica com estratégia, processo e atendimento 24 horas.</p>
+      <div class="pres-pillars">${Object.values(PILLARS).map((p) => `<div style="--pc:${p.color}"><b>${p.name[0]}</b><span>${p.name}</span><small>${PILLAR_DESC[p.key]}</small></div>`).join('')}</div>
+    </section>
+    <section class="pres-sec">
+      <h2>O mapa da jornada</h2><p class="pres-sub">Toque em um mês para ver o que acontece nele.</p>
+      <div id="presMap" class="pres-map"></div>
+    </section>
+    <section class="pres-sec" id="presMonthSec">
+      <div id="presMonth"></div>
+    </section>
+    <section class="pres-sec">
+      <h2>Todo mês, sem parar</h2><p class="pres-sub">Além da novidade de cada mês, estas entregas continuam sempre.</p>
+      <div class="pres-monthly">${MONTHLY.map(([t, d], i) => `<div><span>${String(i + 1).padStart(2, '0')}</span><b>${t}</b><small>${d}</small></div>`).join('')}</div>
+    </section>
+    <section class="pres-sec pres-end">
+      <h2>Como funciona a parceria</h2>
+      <ul class="pres-terms">
+        <li><b>12 meses</b> de jornada, com o primeiro ciclo de 6 meses para implantação e avaliação.</li>
+        <li><b>Metas individuais</b> definidas no diagnóstico da sua clínica.</li>
+        <li><b>Você vê tudo:</b> reuniões quinzenais e relatório todo mês.</li>
+        <li><b>Sua equipe fecha:</b> a 24AGÁ atende e qualifica; a confirmação e o fechamento são sempre humanos.</li>
+      </ul>
+    </section>`;
+  if (mm) mm.destroy();
+  mm = new MindMap($('#presMap'), {
+    clinic: null, present: true, getMonthData: (k) => monthData(null, k),
+    onMonth: (k) => { ui.presMonth = k; renderPresMonth(); $('#presMonthSec').scrollIntoView({ behavior: 'smooth', block: 'start' }); },
+    onTask: () => {}, onTemplateItem: () => {},
+  });
+  renderPresMonth();
+};
+function renderPresMonth() {
+  const n = ui.presMonth || 1; const md = monthData(null, n); const c = clinicById(ui.presClinic);
+  const p0 = PILLARS[md.pillars[0]].color;
+  const range = c && c.startDate ? `${fmtDate(monthStart(c, n), { month: 'long', year: 'numeric' })}` : '';
+  $('#presMonth').innerHTML = `
+    <div class="pm-nav">
+      <button class="btn sm" data-act="presGo" data-n="${n - 1}" ${n === 1 ? 'disabled' : ''} aria-label="Mês anterior">←</button>
+      <div class="pm-dots">${MONTHS.map((m) => `<button class="${m.n === n ? 'on' : ''}" style="--pc:${PILLARS[m.pillars[0]].color}" data-act="presGo" data-n="${m.n}" aria-label="Mês ${m.n}">${m.n}</button>`).join('')}</div>
+      <button class="btn sm" data-act="presGo" data-n="${n + 1}" ${n === 12 ? 'disabled' : ''} aria-label="Próximo mês">→</button>
+    </div>
+    <article class="pm-card" style="--pc:${p0}">
+      <header><span class="pm-num">${n}</span><div><small>MÊS ${n}${range ? ' · ' + range : ''}</small><h2>${esc(md.title)}</h2>
+        <div class="pm-tags">${md.pillars.map(pillarTag).join('')}</div></div></header>
+      <p class="pm-desc">${esc(md.desc)}</p>
+      <div class="pm-cols">
+        <div><h4>O que fazemos neste mês</h4><ol>${md.novo.map((t) => `<li><b>${esc(t.title)}</b>${howTo(t.title) ? `<small>${esc(howTo(t.title))}</small>` : ''}</li>`).join('')}</ol></div>
+        <div><h4>O que você recebe</h4><ul class="pm-out">${md.outputs.map((o) => `<li>${esc(o)}</li>`).join('')}</ul>
+          <div class="pm-plus">+ continua: até 6 criativos, 2 reuniões, Meta Ads, 24AGÁ e relatório.</div></div>
+      </div>
+    </article>`;
+}
 
 // ---------- Financeiro ----------
 VIEWS.financeiro = () => {
@@ -588,7 +592,7 @@ VIEWS.config = () => {
         <p>Seus dados ficam salvos <b>neste aparelho</b> (${(used / 1024).toFixed(0)} KB). Faça backup de vez em quando e para passar dados entre celular e computador.</p>
         <div class="btns"><button class="btn primary" data-act="exportJSON">Baixar backup (.json)</button>
         <label class="btn">Restaurar backup<input type="file" accept="application/json,.json" data-act="importJSON" hidden></label></div>
-        <div class="btns"><button class="btn sm" data-act="csv" data-k="clinics">CSV clínicas</button><button class="btn sm" data-act="csv" data-k="tasks">CSV tarefas</button><button class="btn sm" data-act="csv" data-k="metrics">CSV métricas</button></div>
+        <div class="btns"><button class="btn sm" data-act="csv" data-k="clinics">CSV clínicas</button><button class="btn sm" data-act="csv" data-k="tasks">CSV tarefas</button></div>
       </section>
       <section class="card"><header><h3>Dados</h3></header>
         <div class="btns"><button class="btn" data-act="clearDemo">Remover dados DEMO</button><button class="btn" data-act="addDemo">Recriar dados DEMO</button><button class="btn danger" data-act="wipe">Apagar tudo</button></div>
@@ -755,12 +759,12 @@ document.addEventListener('click', (e) => {
     csv: () => {
       if (d.k === 'clinics') download('clinicas.csv', toCSV(S.clinics, ['name', 'segment', 'city', 'uf', 'stage', 'price', 'setupFee', 'setupWaived', 'mediaBudget', 'baseRevenue', 'startDate', 'payment', 'exclusivity', 'territory', 'demo']), 'text/csv');
       if (d.k === 'tasks') download('tarefas.csv', toCSV(S.tasks.map((t) => ({ ...t, clinica: clinicById(t.clinicId)?.name, statusLabel: statusName(t.status) })), ['clinica', 'month', 'kind', 'pillar', 'title', 'owner', 'due', 'statusLabel', 'doneAt', 'evidence']), 'text/csv');
-      if (d.k === 'metrics') download('metricas.csv', toCSV(S.metrics.map((m) => ({ ...m, clinica: clinicById(m.clinicId)?.name })), ['clinica', 'month', ...MFIELDS.map((f) => f[0]), 'source', 'confidence']), 'text/csv');
     },
     clearDemo: () => { const ds = S.clinics.filter((c) => c.demo); if (!ds.length) return toast('Não há dados DEMO'); if (confirm(`Remover ${ds.length} clínica(s) DEMO?`)) { ds.forEach((c) => deleteClinic(c.id)); log('Removeu dados DEMO'); save(); render(); toast('Dados DEMO removidos'); } },
     addDemo: () => { seedDemo(); save(); render(); toast('Dados DEMO criados'); },
     wipe: () => { if (confirm('Apagar TODOS os dados deste aparelho? Faça backup antes.') && confirm('Tem certeza? Não dá para desfazer.')) { const me = S.me; S = defaultState(); S.me = me; saveNow(); render(); toast('Tudo apagado'); } },
     print: () => window.print(),
+    presGo: () => { ui.presMonth = Math.min(12, Math.max(1, +d.n)); renderPresMonth(); },
     more: () => { $('#moreSheet').hidden = !$('#moreSheet').hidden; },
   };
   if (H[act]) { if (a.tagName === 'BUTTON' || act === 'more') e.preventDefault(); H[act](); }
@@ -777,6 +781,7 @@ document.addEventListener('change', (e) => {
   const H = {
     chk: () => { const t = taskById(ui.panel.id); const i = t.checklist[+d.i]; i.done = el.checked; t.history.unshift({ at: new Date().toISOString(), who: S.me, what: `checklist “${i.t}”: ${i.done ? 'feito' : 'desmarcado'}` });
       if (t.checklist.every((x) => x.done) && t.status === 'a_fazer') setTask(t, 'status', 'andamento'); if (t.checklist.some((x) => x.done) && t.status === 'a_fazer') setTask(t, 'status', 'andamento'); rerender(); },
+    presClinic: () => { ui.presClinic = el.value || null; render(); },
     mapClinic: () => { ui.mapClinic = el.value || null; history.replaceState(null, '', '#/mapa'); closePanel(); render(); },
     kanMonth: () => { ui.kanMonth = el.value; render(); },
     kstat: () => { setTask(taskById(d.id), 'status', el.value); rerender(); },
@@ -830,11 +835,6 @@ document.addEventListener('submit', (e) => {
     S.tasks.push(t); log(`Criou tarefa “${t.title}”`, t.clinicId); closeModal(); rerender(); openPanel({ type: 'task', id: t.id });
   } else if (kind === 'chkAdd') {
     const t = taskById(ui.panel.id); if (!g('t')) return; t.checklist.push({ t: g('t'), done: false }); rerender(); setTimeout(() => $('#panel [name="t"]')?.focus(), 30);
-  } else if (kind === 'metrics') {
-    const cid = f.dataset.c, mN = +f.dataset.m;
-    let m = S.metrics.find((x) => x.clinicId === cid && x.month === mN); if (!m) { m = { id: uid(), clinicId: cid, month: mN }; S.metrics.push(m); }
-    MFIELDS.forEach(([k]) => (m[k] = n(k))); m.source = g('source'); m.confidence = g('confidence');
-    log(`Lançou resultados do mês ${mN}`, cid); save(); render(); toast('Resultados salvos');
   } else if (kind === 'settings') {
     Object.assign(S.settings, { goalClinics: n('goalClinics') || 20, workDays: n('workDays') || 21, hoursPerCreative: n('hoursPerCreative') ?? 0.25, reviewLimit: n('reviewLimit') ?? 2 });
     S.settings.capacity = { Tiago: n('capT') ?? 4, Micaela: n('capM') ?? 4 }; save(); toast('Configurações salvas');

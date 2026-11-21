@@ -168,7 +168,6 @@ function seedDemo() {
     t.status = 'concluido'; t.doneAt = t.due; t.checklist.forEach((i) => (i.done = true));
   });
   S.creatives.filter((x) => x.clinicId === c.id && x.month === 1).forEach((x, i) => (x.status = i < 5 ? 'em_uso' : 'nao_necessario'));
-  S.metrics.push({ id: uid(), clinicId: c.id, month: 1, media: 3000, leads: 100, qualified: 60, scheduled: 30, confirmed: 24, attended: 18, paying: 10, attributedRevenue: 18000, clinicRevenue: 35000, source: 'Manual (demo)' });
   S.clinics.push({
     id: uid(), demo: true, name: 'Odonto Exemplo (DEMO)', segment: 'odontologia', city: 'Londrina', uf: 'PR', territory: 'Londrina — região central',
     contact: '', phone: '', humanResp: '', baseRevenue: 28000, mediaBudget: 2500, price: 2500, setupFee: 1500, setupWaived: true,
