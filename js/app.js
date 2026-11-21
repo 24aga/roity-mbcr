@@ -476,17 +476,17 @@ function listHTML(clinic) {
 VIEWS.clinicas = () => {
   const cols = STAGES;
   view().innerHTML = `
-    <div class="page-h"><p class="muted">Suas clínicas por etapa. Toque em uma para abrir.</p>
+    <div class="page-h"><p class="muted">Suas clínicas por etapa. Toque para abrir · arraste para mudar de etapa<span class="touch-only"> (segure o cartão)</span>.</p>
       <span class="btns" style="margin:0"><button class="btn" data-act="leadNew">+ Lead rápido</button><button class="btn primary" data-act="newClinic">+ Nova clínica</button></span></div>
     ${S.clinics.some((c) => c.demo) ? `<div class="notice demo-n"><span>Estas clínicas marcadas <b>DEMO</b> são só exemplo.</span><button class="btn sm danger" data-act="clearDemo">Apagar clínicas DEMO</button></div>` : ''}
     ${S.clinics.length ? `<div class="pipeline">${cols.map(([k, l]) => {
       let list = S.clinics.filter((c) => c.stage === k); const total = list.length;
       if (k === 'lead' && total > 6) list = [...list].sort((a, b) => (a.nextDate || '9').localeCompare(b.nextDate || '9')).slice(0, 6);
       if (k === 'encerrado') list = list.filter((c) => c.journey || (c.proposals || []).length);
-      return `<section class="pcol"><header><b>${l}</b><span>${k === 'lead' ? total : list.length}</span></header>${k === 'lead' && total > 6 ? `<a class="md-link" href="#/leads">Ver todos os ${total} leads →</a>` : ''}
+      return `<section class="pcol" data-stage="${k}"><header><b>${l}</b><span>${k === 'lead' ? total : list.length}</span></header>${k === 'lead' && total > 6 ? `<a class="md-link" href="#/leads">Ver todos os ${total} leads →</a>` : ''}
         ${list.map((c) => {
           const st = c.journey ? overallFor(c) : null; const n = currentMonth(c);
-          return `<a class="ccard" href="#/clinica/${c.id}"><b>${esc(c.name)}${demoBadge(c)}</b>
+          return `<a class="ccard" href="#/clinica/${c.id}" data-cid="${c.id}" draggable="false"><b>${esc(c.name)}${demoBadge(c)}</b>
             <span>${segLabel(c.segment)} · ${esc(c.city || '—')}${c.uf ? '/' + esc(c.uf) : ''}</span>${c.nextDate && ['lead', 'proposta', 'negociacao'].includes(c.stage) ? `<small class="${c.nextDate <= todayStr() ? 'red' : ''}">Retorno: ${fmtShort(c.nextDate)}</small>` : ''}
             ${st ? `<div class="bar sm"><i style="width:${st.p * 100}%"></i></div><small>${n > 12 ? 'Jornada encerrada' : n ? 'Mês ' + n + ' de 12' : 'Começa ' + fmtShort(c.startDate)} · ${Math.round(st.p * 100)}%</small>` : '<small>Jornada não iniciada</small>'}</a>`;
         }).join('') || '<div class="pempty">—</div>'}</section>`;
