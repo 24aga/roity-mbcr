@@ -350,7 +350,7 @@ async function poolPanel() {
   if (!Sync.enabled()) { box.innerHTML = `<div class="notice">A base de leads fica no seu repositório privado. Conecte a sincronização em <a href="#/config">Configurações</a> para usar.</div>`; return; }
   box.innerHTML = '<p class="hint">Carregando a base de leads…</p>';
   try {
-    const idx = await Pool.index(); const ufs = Object.entries(idx.states || {}).sort((a, b) => b[1].count - a[1].count);
+    const idx = await Pool.index(); if (!box.isConnected) return; const ufs = Object.entries(idx.states || {}).sort((a, b) => b[1].count - a[1].count);
     if (!ufs.length) { box.innerHTML = empty('A base está vazia. Importe uma lista (Kenai, Excel ou CSV).', 'leads'); return; }
     const w = {}; S.clinics.forEach((c) => { if (c.poolKey) w[c.uf] = (w[c.uf] || 0) + 1; });
     box.innerHTML = `<div class="pool">${ufs.map(([uf, st]) => { const done = w[uf] || 0; const pct = st.count ? done / st.count : 0;
@@ -458,13 +458,13 @@ VIEWS.leads = () => {
 };
 async function loadCities() {
   try {
-    const idx = await Pool.index(); const ufs = Object.keys(idx.states || {}).sort((a, b) => idx.states[b].count - idx.states[a].count);
+    const idx = await Pool.index(); if (!$('#cityList')) return; const ufs = Object.keys(idx.states || {}).sort((a, b) => idx.states[b].count - idx.states[a].count);
     if (!ufs.length) { $('#ufChips').innerHTML = ''; $('#cityList').innerHTML = empty('A base está vazia. Toque em Importar para adicionar uma lista.', 'leads'); return; }
     let uf = ui.puf; if (!uf) { try { uf = localStorage.getItem('roity-uf'); } catch (e) {} } if (!ufs.includes(uf)) uf = ufs[0]; ui.puf = uf;
     $('#ufChips').innerHTML = ufs.map((u) => `<button class="ufc ${u === uf ? 'on' : ''}" data-act="pufSel" data-uf="${u}">${u}</button>`).join('');
     const box = $('#cityList'); if (!Pool.data[uf]) box.innerHTML = `<p class="hint">Carregando ${uf}…</p>`;
-    const st = await Pool.state(uf); renderCities(uf, st);
-  } catch (e) { $('#cityList').innerHTML = `<div class="notice warn">Não consegui carregar a base: ${esc(e.message)}</div>`; }
+    const st = await Pool.state(uf); if (!$('#cityList')) return; renderCities(uf, st);
+  } catch (e) { if ($('#cityList')) $('#cityList').innerHTML = `<div class="notice warn">Não consegui carregar a base: ${esc(e.message)}</div>`; }
 }
 function cityStats(uf, st) {
   const f = pf(); const wm = workedMap(); const cs = {};

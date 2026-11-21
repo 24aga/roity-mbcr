@@ -309,6 +309,7 @@ VIEWS.visao = () => {
         </div>
         <a class="btn th-btn" href="#/tarefas" data-act="tf" data-f="hoje">Ver tarefas de hoje →</a>
       </section>`; })()}
+    ${campaignCard()}
     ${meuDiaHTML()}
     <div class="kpis k3 mini">
       <a class="kpi" href="#/clinicas"><span>Clínicas ativas</span><b>${active.length}<small> / ${goal}</small></b>
@@ -605,6 +606,7 @@ VIEWS.calendario = () => {
   const [y, mo] = base.split('-').map(Number);
   const first = new Date(y, mo - 1, 1); const startPad = (first.getDay() + 6) % 7; // segunda primeiro
   const days = new Date(y, mo, 0).getDate();
+  window.__wev = typeof waveEvents === 'function' ? waveEvents() : {};
   const tasks = S.tasks.filter((t) => t.due && t.due.startsWith(base) && clinicById(t.clinicId));
   const byDay = {}; tasks.forEach((t) => (byDay[t.due] = byDay[t.due] || []).push(t));
   const sel = ui.calDay && ui.calDay.startsWith(base) ? ui.calDay : today.startsWith(base) ? today : base + '-01';
@@ -612,9 +614,9 @@ VIEWS.calendario = () => {
   for (let i = 0; i < startPad; i++) cells += '<div class="cd pad"></div>';
   for (let d = 1; d <= days; d++) {
     const ds = `${base}-${String(d).padStart(2, '0')}`; const l = byDay[ds] || [];
-    const meet = l.filter((t) => t.meeting).length; const late = l.filter((t) => taskOverdue(t)).length;
+    const meet = l.filter((t) => t.meeting).length; const late = l.filter((t) => taskOverdue(t)).length; const wev = (window.__wev || {})[ds] || [];
     cells += `<button class="cd ${ds === today ? 'today' : ''} ${ds === sel ? 'sel' : ''}" data-act="calDay" data-d="${ds}" aria-label="${fmtDate(ds)}: ${l.length} itens">
-      <span class="dn">${d}</span>${l.length ? `<span class="cd-c">${meet ? `<i class="m">${meet} reun.</i>` : ''}<i>${l.length - meet} tarefa${l.length - meet === 1 ? '' : 's'}</i>${late ? '<i class="late">!</i>' : ''}</span>` : ''}</button>`;
+      <span class="dn">${d}</span>${wev.length ? `<span class="cd-w">${wev.map((x) => `<i class="${x.k}">${x.k === 'ads' ? '📣' : '📞'} O${x.w.i}</i>`).join('')}</span>` : ''}${l.length ? `<span class="cd-c">${meet ? `<i class="m">${meet} reun.</i>` : ''}<i>${l.length - meet} tarefa${l.length - meet === 1 ? '' : 's'}</i>${late ? '<i class="late">!</i>' : ''}</span>` : ''}</button>`;
   }
   const monthName = ((x) => x.charAt(0).toUpperCase() + x.slice(1))(first.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' }));
   const selList = (byDay[sel] || []).sort((a, b) => b.meeting - a.meeting);
@@ -623,6 +625,7 @@ VIEWS.calendario = () => {
       <button class="btn sm ghost" data-act="calNav" data-d="0">Hoje</button></div>
     <div class="cal-wrap"><div class="cal">${['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'].map((d) => `<div class="cw">${d}</div>`).join('')}${cells}</div>
     <section class="card"><header><h3>${fmtDate(sel, { weekday: 'long', day: '2-digit', month: 'long' })}</h3></header>
+      ${((window.__wev || {})[sel] || []).map((x) => `<a class="cal-wave ${x.k}" href="#/plano">${esc(x.t)}</a>`).join('')}
       ${selList.length ? `<ul class="tlist">${selList.map(taskRow).join('')}</ul>` : empty('Dia livre na agenda.', 'calendario')}
       <p class="hint">Calendário interno do app. Integração com Google Agenda e lembretes por e-mail ainda não estão ativos.</p></section></div>`;
 };
@@ -1227,6 +1230,9 @@ document.addEventListener('click', (e) => {
     impOpen: () => importForm(),
     quotaStart: () => startQuota(),
     planRe: async () => { toast('Replanejando…'); await genPlan('Replanejado manualmente'); render(); toast('Plano replanejado'); },
+    waveView: () => { ui.waveView = d.v; render(); },
+    cron: () => { ui.cron = d.v; render(); },
+    cronNav: () => { const t = todayStr(); ui.cronYm = +d.d === 0 ? t.slice(0, 7) : addMonths((ui.cronYm || t.slice(0, 7)) + '-01', +d.d).slice(0, 7); render(); },
     waveMore: () => { ui.waveShow = (ui.waveShow || 8) + 10; render(); },
     resN2: () => { ui.resN = +d.n; render(); },
     finNav: () => { ui.finYm = +d.d === 0 ? todayStr().slice(0, 7) : ymAdd(ui.finYm || todayStr().slice(0, 7), +d.d); render(); },

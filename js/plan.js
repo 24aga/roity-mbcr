@@ -256,7 +256,11 @@ VIEWS.plano = () => {
       <label class="full"><span>Dias sem prospecção (feriados municipais, folgas) — um por linha, ex.: 2026-12-24</span><textarea name="blocked" rows="2">${esc((cfg.blocked || []).join('\n'))}</textarea></label>
       <div class="btns end"><button class="btn primary">${p ? 'Salvar e replanejar' : 'Gerar o plano'}</button></div>
     </form><p class="hint">Feriados nacionais e fins de semana já ficam de fora. A ordem dos estados é MT → GO → MS → MG → PR → SC, cidades maiores primeiro.</p></details>`;
-  if (!p) { view().innerHTML = `<div class="notice">Ainda não há plano. Confira os números abaixo e toque em <b>Gerar o plano</b>. Ele usa as clínicas que você ainda não contatou.</div>${cfgForm}`; return; }
+  if (!p) {
+    view().innerHTML = `<section class="card plan-loading"><h3>Montando o plano de campanhas…</h3><p class="muted">Carregando os 6 estados e calculando ondas, cidades, datas e verba. Leva alguns segundos.</p><div class="bar"><i class="indet"></i></div></section>${cfgForm}`;
+    if (!ui.planBusy) { ui.planBusy = true; genPlan('Plano inicial').then(() => { ui.planBusy = false; if (route.name === 'plano') render(); toast('Plano de campanhas pronto'); }).catch((er) => { ui.planBusy = false; const b = $('.plan-loading'); if (b) b.innerHTML = `<div class="notice warn">Não consegui montar o plano: ${esc(er.message)}. Confira a sincronização e tente de novo em “Configurar o plano”.</div>`; }); }
+    return;
+  }
   const W = p.waves; const cur = currentWave(); const totDone = touchedSet().size - (p.done0 || 0);
   const budPlan = W.reduce((a, w) => a + w.budget, 0), budSpent = W.reduce((a, w) => a + (+w.spent || 0), 0);
   const show = ui.waveShow || 8;
@@ -267,10 +271,14 @@ VIEWS.plano = () => {
       <div class="kpi"><span>Executado</span><b>${Math.max(0, totDone).toLocaleString('pt-BR')}</b><em>${p.total ? Math.round((Math.max(0, totDone) / p.total) * 100) : 0}% das clínicas do plano</em></div>
       <div class="kpi"><span>Verba de anúncios</span><b>${money(budSpent)}</b><em>gasto de ${money(budPlan)} previstos · ${money(cfg.budgetDay)}/dia</em></div>
     </div>
+    ${goalsHTML()}
+    ${cronHTML()}
     ${cur ? `<section class="card wave-now"><header><h3>${waveStatus(cur)[0] === 'ativa' ? 'Agora' : 'Próxima'}: Onda ${cur.i} · ${cur.uf}</h3><span class="btns" style="margin:0"><button class="btn primary" data-act="quotaStart">▶ Minha cota de hoje</button><button class="btn" data-act="planRe">Replanejar</button></span></header>
       <p class="muted">Anúncios em ${esc(cur.adRegions.join(', '))} · ligações ${fmtShort(cur.first)} a ${fmtShort(cur.last)}</p></section>` : ''}
-    <h3 class="sec-t">Ondas</h3>
-    <div class="waves">${W.slice(0, show).map((w) => { const [k, l] = waveStatus(w); const A = w.cities.reduce((a, c) => a + c[2], 0), B = w.cities.reduce((a, c) => a + c[3], 0), C = w.cities.reduce((a, c) => a + c[4] + c[5], 0);
+    <div class="wv-head"><h3 class="sec-t">Ondas</h3><div class="seg">${[['cards', 'Cartões'], ['table', 'Tabela completa']].map(([k, l]) => `<button aria-selected="${(ui.waveView || 'cards') === k}" data-act="waveView" data-v="${k}">${l}</button>`).join('')}</div></div>
+    ${(ui.waveView || 'cards') === 'table' ? `<section class="card"><div class="tscroll"><table class="tbl wtbl"><thead><tr><th>Onda</th><th>UF</th><th>Anúncios (regiões)</th><th>Anúncio começa</th><th>Ligações</th><th>Clínicas</th><th>Verba</th><th>Status</th></tr></thead><tbody>
+      ${W.map((w) => `<tr class="st-${waveStatus(w)[0]}"><td><b>${w.i}</b></td><td>${w.uf}</td><td>${esc(w.adRegions.join(', '))}<br><small>${esc(w.cities.slice(0, 4).map((c) => c[1]).join(', '))}${w.cities.length > 4 ? ` +${w.cities.length - 4}` : ''}</small></td><td><b>${dm(w.ads)}</b></td><td>${dm(w.first)} → ${dm(w.last)}</td><td>${w.n.toLocaleString('pt-BR')}</td><td>${money(w.budget)}</td><td>${waveStatus(w)[1]}</td></tr>`).join('')}
+    </tbody></table></div></section>` : `<div class="waves">${W.slice(0, show).map((w) => { const [k, l] = waveStatus(w); const A = w.cities.reduce((a, c) => a + c[2], 0), B = w.cities.reduce((a, c) => a + c[3], 0), C = w.cities.reduce((a, c) => a + c[4] + c[5], 0);
       const small = Object.keys(w.regions).filter((r) => !w.adRegions.includes(r));
       return `<article class="wave st-${k}"><header><b>Onda ${w.i}</b><span class="wv-uf">${w.uf}</span><span class="wv-st">${l}</span></header>
         <div class="wv-dates"><div><small>ANÚNCIOS</small><b>${dm(w.ads)} → ${dm(w.last)}</b></div><div><small>LIGAÇÕES</small><b>${dm(w.first)} → ${dm(w.last)}</b></div><div><small>CLÍNICAS</small><b>${w.n.toLocaleString('pt-BR')}</b></div></div>
@@ -278,7 +286,96 @@ VIEWS.plano = () => {
         <p class="wv-cls">${A ? `<span class="tg tA">A ${A}</span>` : ''}${B ? `<span class="tg tB">B ${B}</span>` : ''}${C ? `<span class="tg tC">C/D ${C}</span>` : ''}</p>
         <p class="wv-cities">${w.cities.slice(0, 6).map((c) => `${esc(c[1])} <b>${c[2] + c[3] + c[4] + c[5]}</b>`).join(' · ')}${w.cities.length > 6 ? ` · +${w.cities.length - 6} cidades` : ''}</p>
         <div class="wv-bud"><span>Verba prevista <b>${money(w.budget)}</b></span><label><span>Gasto</span><input type="number" min="0" step="1" data-spent="${w.i}" value="${w.spent || ''}" placeholder="R$"></label></div></article>`; }).join('')}</div>
-    ${W.length > show ? `<button class="btn block" data-act="waveMore">Ver mais ondas (${W.length - show})</button>` : ''}
+    ${W.length > show ? `<button class="btn block" data-act="waveMore">Ver mais ondas (${W.length - show})</button>` : ''}`}
     ${cfgForm}
     ${(S.planHist || []).length ? `<section class="card"><header><h3>Versões anteriores</h3></header><ul class="log">${S.planHist.map((h) => `<li><time>${new Date(h.at).toLocaleDateString('pt-BR')}</time><b>v${h.v}</b> ${h.waves} ondas até ${h.end ? fmtDate(h.end) : '—'} · ${esc(h.note)}</li>`).join('')}</ul></section>` : ''}`;
 };
+
+function waveEvents() { const ev = {}; (S.plan ? S.plan.waves : []).forEach((w) => { (ev[w.ads] = ev[w.ads] || []).push({ k: 'ads', w, t: `📣 Onda ${w.i}: anúncios (${w.adRegions.join(', ')})` }); (ev[w.first] = ev[w.first] || []).push({ k: 'call', w, t: `📞 Onda ${w.i}: começam as ligações (${w.cities.slice(0, 2).map((c) => c[1]).join(', ')}${w.cities.length > 2 ? '…' : ''})` }); }); return ev; }
+function campaignCard() {
+  const p = S.plan; if (!p) return Sync.enabled() ? `<a class="camp-card empty-c" href="#/plano"><b>📣 Plano de campanhas</b><span>Toque para montar as ondas: cidades, datas dos anúncios, ligações e verba.</span></a>` : '';
+  const w = currentWave(); if (!w) return ''; const nx = p.waves[p.waves.indexOf(w) + 1]; const t = todayStr();
+  const line = (x) => `<div class="cc-row"><b>Onda ${x.i} · ${x.uf}</b><span>📣 anúncios <b>${dm(x.ads)}</b> em ${esc(x.adRegions.join(', '))}</span><span>📞 ligações <b>${dm(x.first)} → ${dm(x.last)}</b> · ${x.n.toLocaleString('pt-BR')} clínicas</span></div>`;
+  return `<a class="camp-card" href="#/plano"><div class="cc-h"><small>CAMPANHAS · ${waveStatus(w)[1].toUpperCase()}</small><span class="link">Ver plano e metas →</span></div>${line(w)}${nx ? `<div class="cc-next">Depois:</div>${line(nx)}` : ''}${goalsHTML(true)}</a>`;
+}
+
+// ---------- metas da prospecção (dia, semana, mês) ----------
+function sumProsp(from, to, person) {
+  const out = { news: 0, calls: 0, msgs: 0, convos: 0, pres: 0 };
+  Object.entries(S.daily || {}).forEach(([d, r]) => { if (d < from || d > to) return; Object.entries(r.p || {}).forEach(([who, v]) => { if (person && who !== person) return; Object.keys(out).forEach((k) => (out[k] += +v[k] || 0)); }); });
+  return out;
+}
+function workdaysBetween(a, b, cfg) { let n = 0; for (let d = a; d <= b; d = addDays(d, 1)) if (isWorkday(d, cfg)) n++; return n; }
+function goalsHTML(compact) {
+  const cfg = S.plan ? S.plan.cfg : planCfg(); const t = todayStr();
+  const wk0 = addDays(t, -((parseD(t).getDay() + 6) % 7)), wk1 = addDays(wk0, 4); const m0 = t.slice(0, 8) + '01', m1 = addDays(addMonths(m0, 1), -1);
+  const per = [['Hoje', t, t], ['Semana', wk0, wk1], ['Mês', m0, m1]];
+  const people = ['Tiago', 'Micaela']; const g = S.settings.goals || {};
+  const row = (label, a, b) => { const wd = workdaysBetween(a, b, cfg) || (label === 'Hoje' ? 0 : 0); const tot = sumProsp(a, b); const goalNews = dailyCap(cfg) * Math.max(wd, label === 'Hoje' && isWorkday(t, cfg) ? 1 : wd);
+    const goalCalls = (+cfg.callsPer || 30) * people.length * Math.max(wd, 0); const goalPres = (+g.pres || 1) * people.length * Math.max(wd, 0);
+    const cell = (v, goal) => `<div class="gm"><b>${v.toLocaleString('pt-BR')}</b><small>de ${goal.toLocaleString('pt-BR')}</small><div class="bar ${goal && v >= goal ? 'ok' : ''}"><i style="width:${goal ? Math.min(100, (v / goal) * 100) : 0}%"></i></div></div>`;
+    return `<tr><th>${label}<small>${wd} ${wd === 1 ? 'dia útil' : 'dias úteis'}</small></th><td>${cell(tot.news, goalNews)}</td><td>${cell(tot.calls, goalCalls)}</td><td>${cell(tot.msgs, Math.max(0, goalNews - goalCalls))}</td><td>${cell(tot.pres, goalPres)}</td></tr>`; };
+  const mine = sumProsp(t, t, S.me); const myGoal = +cfg.perDay[S.me] || 0;
+  const act = S.clinics.filter((c) => ['ativo', 'onboarding'].includes(c.stage)).length; const capFit = (typeof capacity === 'function' ? capacity().fits : 0);
+  const spentMonth = S.plan ? S.plan.waves.reduce((a, w) => a + (+w.spent || 0), 0) : 0;
+  if (compact) return `<div class="gl"><span>Meta de hoje: <b>${myGoal}</b> novos (você fez <b>${mine.news}</b>) · equipe <b>${dailyCap(cfg)}</b>/dia</span></div>`;
+  return `<section class="card goals"><header><h3>Metas</h3><small class="muted">editáveis em “Configurar o plano”</small></header>
+    <div class="goal-cards">
+      <div><span>Novos contatos por dia</span><b>${dailyCap(cfg)}</b><small>Tiago ${cfg.perDay.Tiago} · Micaela ${cfg.perDay.Micaela}<br>cada um: ${cfg.callsPer} ligações + ${Math.max(0, (cfg.perDay.Tiago || 0) - cfg.callsPer)} mensagens</small></div>
+      <div><span>Diagnósticos</span><b>${(+g.pres || 1) * 2}/dia</b><small>até ${cfg.diagSlots} por dia na agenda do Tiago</small></div>
+      <div><span>Anúncios</span><b>${money(cfg.budgetDay)}/dia</b><small>≈ ${money(cfg.budgetDay * 30)}/mês · lançado ${money(spentMonth)}</small></div>
+      <div><span>Clientes ativos</span><b>${act} / ${S.settings.goalClinics}</b><small>cabem ~${capFit} com as horas atuais</small></div>
+    </div>
+    <div class="tscroll"><table class="tbl gtbl"><thead><tr><th></th><th>Novos contatos</th><th>Ligações</th><th>Mensagens</th><th>Diagnósticos</th></tr></thead><tbody>${per.map(([l, a, b]) => row(l, a, b)).join('')}</tbody></table></div>
+    <p class="hint">Somando você e a Micaela. O que faltar num dia passa para o dia seguinte e o plano se ajusta sozinho.</p></section>`;
+}
+
+// ---------- cronograma: dia a dia, mês a mês, ano a ano ----------
+function planDays() {
+  const p = S.plan; if (!p) return {};
+  const key = p.v + '|' + p.createdAt; if (ui._pd && ui._pd.key === key) return ui._pd.days;
+  const cap = dailyCap(p.cfg); const days = {}; const get = (d) => (days[d] = days[d] || { calls: 0, items: [], ads: [], budget: 0 });
+  let day = p.waves[0].first, left = cap;
+  p.waves.forEach((w) => w.cities.forEach(([uf, city, a, b, c, d2]) => { let n = a + b + c + d2;
+    while (n > 0) { const u = Math.min(left, n); const D = get(day); D.calls += u; const last = D.items[D.items.length - 1];
+      if (last && last.city === city && last.w === w.i) last.n += u; else D.items.push({ w: w.i, uf, city, n: u });
+      n -= u; left -= u; if (left === 0) { day = nextWork(addDays(day, 1), p.cfg); left = cap; } } }));
+  for (let d = p.waves[0].ads; d <= p.waves[p.waves.length - 1].last; d = addDays(d, 1)) { const act = p.waves.filter((w) => w.ads <= d && d <= w.last); if (act.length) { const D = get(d); D.ads = act; D.budget = p.cfg.budgetDay; } }
+  ui._pd = { key, days }; return days;
+}
+const WD = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'];
+const capFirst = (x) => x.charAt(0).toUpperCase() + x.slice(1);
+function doneOn(d) { return Object.values(((S.daily || {})[d] || {}).p || {}).reduce((a, v) => a + (+v.news || 0), 0); }
+function cronHTML() {
+  const p = S.plan; if (!p) return ''; const days = planDays(); const mode = ui.cron || 'dia'; const t = todayStr();
+  const tabs = `<div class="seg">${[['dia', 'Dia a dia'], ['mes', 'Mês a mês'], ['ano', 'Ano a ano']].map(([k, l]) => `<button aria-selected="${mode === k}" data-act="cron" data-v="${k}">${l}</button>`).join('')}</div>`;
+  let body = '';
+  if (mode === 'dia') {
+    const ym = ui.cronYm || (t >= p.waves[0].ads ? t.slice(0, 7) : p.waves[0].ads.slice(0, 7)); ui.cronYm = ym;
+    const label = capFirst(parseD(ym + '-01').toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' }));
+    const end = addDays(addMonths(ym + '-01', 1), -1); const rows = [];
+    for (let d = ym + '-01'; d <= end; d = addDays(d, 1)) {
+      const D = days[d]; const tasks = S.tasks.filter((x) => x.planTask && x.due === d); const off = !isWorkday(d, p.cfg);
+      if (!D && !tasks.length) continue;
+      const done = doneOn(d); const ads = D && D.ads.length ? D.ads.map((w) => `O${w.i}: ${w.adRegions.join(', ')}`).join(' · ') : '';
+      rows.push(`<tr class="${d === t ? 'today' : ''} ${off ? 'off' : ''}"><th>${d.slice(8)}/${d.slice(5, 7)}<small>${WD[parseD(d).getDay()]}${HOLIDAYS.includes(d) ? ' · feriado' : ''}</small></th>
+        <td data-l="Ligações">${D && D.items.length ? D.items.map((x) => `<span class="ci">O${x.w} · <b>${esc(x.city)}</b>/${x.uf} ${x.n}</span>`).join('') : off ? '<small class="muted">sem ligações</small>' : '—'}</td>
+        <td data-l="Contatos">${D && D.calls ? `<b>${D.calls}</b>${d <= t ? `<small class="${done >= D.calls ? 'okc' : done ? '' : 'late'}"> feito ${done}</small>` : ''}` : '—'}</td>
+        <td data-l="Anúncios">${ads ? `<small>${esc(ads)}</small>` : '—'}</td><td data-l="Verba">${D && D.budget ? money(D.budget) : '—'}</td>
+        <td data-l="Tarefas">${tasks.map((x) => `<small class="tk ${x.status === 'concluido' ? 'done' : ''}">${x.status === 'concluido' ? '✓ ' : ''}${esc(x.title.replace(/^Onda (\d+) · \w{2}: /, 'O$1: '))} · ${x.owner}</small>`).join('') || '—'}</td></tr>`);
+    }
+    body = `<div class="cal-h"><button class="btn sm" data-act="cronNav" data-d="-1" aria-label="Mês anterior">←</button><h2>${label}</h2><button class="btn sm" data-act="cronNav" data-d="1" aria-label="Próximo mês">→</button><button class="btn sm ghost" data-act="cronNav" data-d="0">Hoje</button></div>
+      ${rows.length ? `<div class="tscroll"><table class="tbl cron"><thead><tr><th>Dia</th><th>Ligações (onda · cidade · contatos)</th><th>Contatos</th><th>Anúncios no ar</th><th>Verba</th><th>Tarefas do plano</th></tr></thead><tbody>${rows.join('')}</tbody></table></div>` : empty('Nada planejado neste mês.', 'calendario')}`;
+  } else {
+    const keyOf = (d) => (mode === 'mes' ? d.slice(0, 7) : d.slice(0, 4)); const agg = {};
+    Object.entries(days).forEach(([d, D]) => { const k = keyOf(d); const a = (agg[k] = agg[k] || { calls: 0, done: 0, budget: 0, waves: new Set(), ufs: new Set(), cities: {} }); a.calls += D.calls; a.budget += D.budget || 0; a.done += d <= t ? doneOn(d) : 0;
+      D.items.forEach((x) => { a.waves.add(x.w); a.ufs.add(x.uf); a.cities[x.city] = (a.cities[x.city] || 0) + x.n; }); D.ads.forEach((w) => a.waves.add(w.i)); });
+    const spent = {}; p.waves.forEach((w) => { if (w.spent) { const k = keyOf(w.first); spent[k] = (spent[k] || 0) + +w.spent; } });
+    const label = (k) => (mode === 'mes' ? capFirst(parseD(k + '-01').toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })) : k);
+    body = `<div class="tscroll"><table class="tbl cron cm"><thead><tr><th>${mode === 'mes' ? 'Mês' : 'Ano'}</th><th>Ondas</th><th>Onde (cidades com mais contatos)</th><th>Contatos previstos</th><th>Feitos</th><th>Verba prevista</th><th>Gasto lançado</th></tr></thead><tbody>
+      ${Object.keys(agg).sort().map((k) => { const a = agg[k]; const ws = [...a.waves].sort((x, y) => x - y); const top = Object.entries(a.cities).sort((x, y) => y[1] - x[1]).slice(0, 4).map(([c]) => c);
+        return `<tr class="${keyOf(t) === k ? 'today' : ''}"><th>${label(k)}</th><td>${ws.length ? `${ws[0]}${ws.length > 1 ? '–' + ws[ws.length - 1] : ''}` : '—'}</td><td><small><b>${[...a.ufs].join(', ')}</b> · ${esc(top.join(', '))}</small></td><td><b>${a.calls.toLocaleString('pt-BR')}</b></td><td>${a.done ? a.done.toLocaleString('pt-BR') : '—'}</td><td>${money(Math.round(a.budget))}</td><td>${spent[k] ? money(spent[k]) : '—'}</td></tr>`; }).join('')}
+    </tbody></table></div>`;
+  }
+  return `<section class="card cron-card"><header><h3>Cronograma</h3>${tabs}</header>${body}<p class="hint">Previsto pelo plano atual. “Feito” vem dos contatos registrados por você e pela Micaela. Se o ritmo mudar, o plano se ajusta.</p></section>`;
+}
