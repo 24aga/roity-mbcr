@@ -1,5 +1,5 @@
 // Service worker: deixa o app abrir offline. Mude VERSION a cada atualização publicada.
-const VERSION = 'mbcr-v2.10.0';
+const VERSION = 'mbcr-v2.11.0';
 const FILES = ['./', './index.html', './css/app.css', './js/template.js', './js/howto.js', './js/store.js', './js/map.js', './js/sync.js', './js/app.js', './js/leads.js', './js/extra.js', './js/plan.js', './js/drag.js',
   './manifest.webmanifest', './icons/icon-192.png', './icons/icon-512.png', './icons/apple-touch-icon.png', './icons/logo-white.png', './icons/logo-black.png', './icons/symbol-white.png'];
 self.addEventListener('install', (e) => { e.waitUntil(caches.open(VERSION).then((c) => c.addAll(FILES))); self.skipWaiting(); });

@@ -26,8 +26,34 @@ function rowByKey(uf, key) {
 }
 
 // ---------- gerar o plano ----------
+// nomes da Kenai que diferem do IBGE
+const CITY_ALIAS = { 'santo antonio do leverger': 'santo antonio de leverger', 'bom jesus': 'bom jesus de goias', 'brasopolis': 'brazopolis', 'balneario de picarras': 'balneario picarras' };
+const naC = (s) => { const k = noAcc(s).replace(/'/g, '').replace(/-/g, ' '); return CITY_ALIAS[k] || k; };
+const UF_NAME = { MT: 'Mato Grosso', GO: 'Goiás', MS: 'Mato Grosso do Sul', MG: 'Minas Gerais', PR: 'Paraná', SC: 'Santa Catarina' };
+const AD_MIN_REGION = 25, AD_MIN_CITY = 40, AD_MAX = 8;
+// locais do anúncio: cidades-polo das regiões imediatas (IBGE) com 20+ clínicas na onda; cidades grandes fora do polo entram também
+function adPlacesFor(w, rm) {
+  const tot = (c) => c[2] + c[3] + c[4] + c[5]; const im = {}; const regOf = (city) => (rm[naC(city)] || [null, null])[1];
+  w.cities.forEach((c) => { const r = regOf(c[1]) || '?'; im[r] = (im[r] || 0) + tot(c); });
+  const out = []; const has = (n) => out.some((x) => noAcc(x.n) === noAcc(n)); let covered = 0;
+  const regs = Object.entries(im).filter(([r]) => r !== '?').sort((a, b) => b[1] - a[1]);
+  const hubs = (r) => r.split(/\s*[-–—¿]\s*(?=[A-ZÁÉÍÓÚÂÊÔÃÕÇ])/).map((x) => x.trim()).filter(Boolean);
+  const inTake = new Set();
+  regs.forEach(([r, n], i) => { const hs = hubs(r); if (i > 0 && (n < AD_MIN_REGION || out.length + hs.length > AD_MAX)) return; inTake.add(r); covered += n; hs.forEach((h, k) => { if (!has(h)) out.push({ n: h, c: k ? 0 : n, k: 'polo' }); }); });
+  w.cities.filter((c) => tot(c) >= AD_MIN_CITY && !has(c[1])).forEach((c) => { out.push({ n: c[1], c: tot(c), k: 'cidade' }); if (!inTake.has(regOf(c[1]))) covered += tot(c); });
+  return { places: out, out: Math.max(0, w.n - covered) };
+}
+const adNames = (w) => (w.adPlaces ? w.adPlaces.map((x) => x.n) : (w.adRegions || []).filter((r) => r !== 'Outras'));
+async function ensureAdPlaces() {
+  const p = S.plan; if (!p || p.waves.every((w) => w.adPlaces)) return false;
+  const reg = (await Pool.get('leads/regions.json')).obj || { states: {} };
+  p.waves.forEach((w) => { const a = adPlacesFor(w, (reg.states || {})[w.uf] || {}); w.adPlaces = a.places; w.adOut = a.out; });
+  syncPlanTasksAds(); save(); return true;
+}
+function adCopyText(w) { return adNames(w).map((n) => `${n}, ${UF_NAME[w.uf] || w.uf}, Brasil`).join('\n'); }
+
 async function genPlan(reason) {
-  const cfg = planCfg(); const na = (s) => noAcc(s).replace(/'/g, '').replace(/-/g, ' ');
+  const cfg = planCfg(); const na = naC;
   const reg = (await Pool.get('leads/regions.json')).obj || { states: {} };
   const done = touchedSet(); const cap = dailyCap(cfg); const waveN = cap * cfg.waveDays;
   const blocks = [];
@@ -57,8 +83,9 @@ async function genPlan(reason) {
     while (n > 0) { const u = Math.min(left, n); n -= u; left -= u; w.last = day; if (left === 0) { day = nextWork(addDays(day, 1), cfg); left = cap; } }
     w.ads = addDays(w.first, -cfg.adsLead); w.budget = 0; w.spent = 0;
     w.cities = Object.entries(w.cities).map(([c, v]) => [w.uf, c, v.A, v.B, v.C, v.D]);
-    w.adRegions = Object.entries(w.regions).filter(([, n2]) => n2 >= cfg.minAdRegion).map(([r]) => r);
+    w.adRegions = Object.entries(w.regions).filter(([r, n2]) => n2 >= cfg.minAdRegion && r !== 'Outras').map(([r]) => r);
     if (!w.adRegions.length) w.adRegions = [Object.entries(w.regions).sort((a, b) => b[1] - a[1])[0][0]];
+    const ap = adPlacesFor(w, (reg.states || {})[w.uf] || {}); w.adPlaces = ap.places; w.adOut = ap.out;
   });
   if (waves.length) { for (let d = waves[0].ads; d <= waves[waves.length - 1].last; d = addDays(d, 1)) { const act = waves.filter((w) => w.ads <= d && d <= w.last); act.forEach((w) => (w.budget += cfg.budgetDay / act.length)); } }
   waves.forEach((w) => (w.budget = Math.round(w.budget)));
@@ -126,6 +153,13 @@ function planCtlHTML() {
     <p class="hint">Recalcular mantém tudo o que vocês já fizeram e redistribui só o que falta, a partir de hoje. Nada da base é apagado.</p></section>`;
 }
 
+// atualiza o texto das tarefas de anúncio ainda abertas quando os locais mudam
+function syncPlanTasksAds() {
+  const p = S.plan; if (!p) return;
+  S.tasks.forEach((x) => { if (!x.planTask || x.status !== 'a_fazer' || x.planV !== p.v || !/-k4$/.test(x.id)) return; const w = p.waves.find((y) => y.i === x.wave); if (!w) return; const regs = adNames(w).join(', ');
+    x.title = `Onda ${w.i} · ${w.uf}: aprovar e ativar os anúncios — ${regs}`; x.checklist = [{ t: `Verba: até ${money(p.cfg.budgetDay)}/dia no total`, done: x.checklist[0]?.done || false }, { t: 'Locais (copie no Plano de campanhas): ' + regs, done: false }, { t: 'Raio de 30–40 km em cada local', done: false }]; });
+}
+
 // ---------- tarefas das próximas 3 ondas ----------
 const ROITY_ID = '__roity';
 function roityClinic() { let c = clinicById(ROITY_ID); if (!c) { c = { id: ROITY_ID, name: 'Roity · Prospecção', stage: 'interno', internal: true, createdAt: new Date().toISOString() }; S.clinics.push(c); } return c; }
@@ -141,9 +175,9 @@ function syncPlanTasks() {
     const id = `pt-${p.v}-${w.i}-${k}`; if (S.tasks.some((x) => x.id === id)) return;
     let due = off === 'D-1' ? prevWork(addDays(w.first, -1), p.cfg) : off === 'D0' ? w.first : off === 'D+5' ? addWeekdays(w.first, 5) : prevWork(addDays(w.ads, off), p.cfg);
     if (due < t) due = nextWork(t, p.cfg);
-    const regs = w.adRegions.join(', ');
+    const regs = adNames(w).join(', ');
     S.tasks.push({ id, clinicId: ROITY_ID, month: 0, kind: 'onda', pillar: pil, title: `Onda ${w.i} · ${w.uf}: ${txt}${k === 'k4' ? ' — ' + regs : ''}`, owner: who, due, priority: 'alta', status: 'a_fazer',
-      checklist: k === 'k3' ? [{ t: 'Criativo A — dor (atendimento lento, perda de agendamentos)', done: false }, { t: 'Criativo B — solução (MBCR + 24AGÁ, diagnóstico gratuito)', done: false }] : k === 'k4' ? [{ t: `Verba: até ${money(p.cfg.budgetDay)}/dia no total`, done: false }, { t: 'Segmentação por região: ' + regs, done: false }] : [],
+      checklist: k === 'k3' ? [{ t: 'Criativo A — dor (atendimento lento, perda de agendamentos)', done: false }, { t: 'Criativo B — solução (MBCR + 24AGÁ, diagnóstico gratuito)', done: false }] : k === 'k4' ? [{ t: `Verba: até ${money(p.cfg.budgetDay)}/dia no total`, done: false }, { t: 'Locais (copie no Plano de campanhas): ' + regs, done: false }, { t: 'Raio de 30–40 km em cada local', done: false }] : [],
       meeting: false, hours: k === 'k3' ? 1.5 : 0.5, evidence: '', notes: '', doneAt: null, planTask: true, planV: p.v, wave: w.i, history: [{ at: new Date().toISOString(), who: S.me, what: 'Criada pelo plano de campanhas' }] });
   }));
 }
@@ -283,6 +317,7 @@ VIEWS.plano = () => {
     if (!ui.planBusy) { ui.planBusy = true; genPlan('Plano inicial').then(() => { ui.planBusy = false; if (route.name === 'plano') render(); toast('Plano de campanhas pronto'); }).catch((er) => { ui.planBusy = false; const b = $('.plan-loading'); if (b) b.innerHTML = `<div class="notice warn">Não consegui montar o plano: ${esc(er.message)}. Confira a sincronização e tente de novo em “Configurar o plano”.</div>`; }); }
     return;
   }
+  if (p.waves.some((w) => !w.adPlaces) && !ui.adBusy) { ui.adBusy = true; ensureAdPlaces().then((ch) => { ui.adBusy = false; if (ch && route.name === 'plano') render(); }).catch(() => { ui.adBusy = false; }); }
   const W = p.waves; const cur = currentWave(); const totDone = touchedSet().size - (p.done0 || 0);
   const budPlan = W.reduce((a, w) => a + w.budget, 0), budSpent = W.reduce((a, w) => a + (+w.spent || 0), 0);
   const show = ui.waveShow || 8;
@@ -297,28 +332,30 @@ VIEWS.plano = () => {
     ${goalsHTML()}
     ${cronHTML()}
     ${cur ? `<section class="card wave-now"><header><h3>${waveStatus(cur)[0] === 'ativa' ? 'Agora' : 'Próxima'}: Onda ${cur.i} · ${cur.uf}</h3><span class="btns" style="margin:0"><button class="btn primary" data-act="quotaStart">▶ Minha cota de hoje</button><button class="btn" data-act="planRe">Replanejar</button></span></header>
-      <p class="muted">Anúncios em ${esc(cur.adRegions.join(', '))} · ligações ${fmtShort(cur.first)} a ${fmtShort(cur.last)}</p></section>` : ''}
+      <p class="muted">Anúncios em ${esc(adNames(cur).join(', '))} · ligações ${fmtShort(cur.first)} a ${fmtShort(cur.last)}</p></section>` : ''}
     <div class="wv-head"><h3 class="sec-t">Ondas</h3><div class="seg">${[['cards', 'Cartões'], ['table', 'Tabela completa']].map(([k, l]) => `<button aria-selected="${(ui.waveView || 'cards') === k}" data-act="waveView" data-v="${k}">${l}</button>`).join('')}</div></div>
-    ${(ui.waveView || 'cards') === 'table' ? `<section class="card"><div class="tscroll"><table class="tbl wtbl"><thead><tr><th>Onda</th><th>UF</th><th>Anúncios (regiões)</th><th>Anúncio começa</th><th>Ligações</th><th>Clínicas</th><th>Verba</th><th>Status</th></tr></thead><tbody>
-      ${W.map((w) => `<tr class="st-${waveStatus(w)[0]}"><td><b>${w.i}</b></td><td>${w.uf}</td><td>${esc(w.adRegions.join(', '))}<br><small>${esc(w.cities.slice(0, 4).map((c) => c[1]).join(', '))}${w.cities.length > 4 ? ` +${w.cities.length - 4}` : ''}</small></td><td><b>${dm(w.ads)}</b></td><td>${dm(w.first)} → ${dm(w.last)}</td><td>${w.n.toLocaleString('pt-BR')}</td><td>${money(w.budget)}</td><td>${waveStatus(w)[1]}</td></tr>`).join('')}
+    ${(ui.waveView || 'cards') === 'table' ? `<section class="card"><div class="tscroll"><table class="tbl wtbl"><thead><tr><th>Onda</th><th>UF</th><th>Anunciar em (raio 30–40 km)</th><th>Anúncio começa</th><th>Ligações</th><th>Clínicas</th><th>Verba</th><th>Status</th></tr></thead><tbody>
+      ${W.map((w) => `<tr class="st-${waveStatus(w)[0]}"><td><b>${w.i}</b></td><td>${w.uf}</td><td>${esc(adNames(w).join(', '))}<br><small>ligações: ${esc(w.cities.slice(0, 4).map((c) => c[1]).join(' → '))}${w.cities.length > 4 ? ` +${w.cities.length - 4}` : ''}</small></td><td><b>${dm(w.ads)}</b></td><td>${dm(w.first)} → ${dm(w.last)}</td><td>${w.n.toLocaleString('pt-BR')}</td><td>${money(w.budget)}</td><td>${waveStatus(w)[1]}</td></tr>`).join('')}
     </tbody></table></div></section>` : `<div class="waves">${W.slice(0, show).map((w) => { const [k, l] = waveStatus(w); const A = w.cities.reduce((a, c) => a + c[2], 0), B = w.cities.reduce((a, c) => a + c[3], 0), C = w.cities.reduce((a, c) => a + c[4] + c[5], 0);
-      const small = Object.keys(w.regions).filter((r) => !w.adRegions.includes(r));
       return `<article class="wave st-${k}"><header><b>Onda ${w.i}</b><span class="wv-uf">${w.uf}</span><span class="wv-st">${l}</span></header>
         <div class="wv-dates"><div><small>ANÚNCIOS</small><b>${dm(w.ads)} → ${dm(w.last)}</b></div><div><small>LIGAÇÕES</small><b>${dm(w.first)} → ${dm(w.last)}</b></div><div><small>CLÍNICAS</small><b>${w.n.toLocaleString('pt-BR')}</b></div></div>
-        <p class="wv-reg">📣 ${w.adRegions.map(esc).join(' · ')}${small.length ? `<small> + no mesmo anúncio: ${small.map(esc).join(', ')}</small>` : ''}</p>
+        <div class="wv-ad"><div class="wv-lbl"><span>📣 Anunciar em <small>raio 30–40 km em cada</small></span><button class="btn sm" data-act="copyAd" data-w="${w.i}">Copiar locais</button></div>
+          <p class="wv-places">${(w.adPlaces || adNames(w).map((n) => ({ n, c: 0 }))).map((x) => `<span class="pl${x.k === 'cidade' ? ' pc' : ''}">${esc(x.n)}${x.c ? ` <b>${x.c}</b>` : ''}</span>`).join('')}</p>
+          ${w.adOut ? `<small class="muted">${w.adOut.toLocaleString('pt-BR')} clínicas de cidades pequenas ficam fora do anúncio: só ligação e WhatsApp.</small>` : ''}</div>
         <p class="wv-cls">${A ? `<span class="tg tA">A ${A}</span>` : ''}${B ? `<span class="tg tB">B ${B}</span>` : ''}${C ? `<span class="tg tC">C/D ${C}</span>` : ''}</p>
-        <p class="wv-cities">${w.cities.slice(0, 6).map((c) => `${esc(c[1])} <b>${c[2] + c[3] + c[4] + c[5]}</b>`).join(' · ')}${w.cities.length > 6 ? ` · +${w.cities.length - 6} cidades` : ''}</p>
+        <div class="wv-lbl"><span>📞 Ordem das ligações <small>maior cidade primeiro</small></span></div>
+        <p class="wv-cities">${w.cities.slice(0, 6).map((c, k) => `<span class="oc"><i>${k + 1}</i>${esc(c[1])} <b>${c[2] + c[3] + c[4] + c[5]}</b></span>`).join('')}${w.cities.length > 6 ? `<span class="oc oc-more">+${w.cities.length - 6} cidades</span>` : ''}</p>
         <div class="wv-bud"><span>Verba prevista <b>${money(w.budget)}</b></span><label><span>Gasto</span><input type="number" min="0" step="1" data-spent="${w.i}" value="${w.spent || ''}" placeholder="R$"></label></div></article>`; }).join('')}</div>
     ${W.length > show ? `<button class="btn block" data-act="waveMore">Ver mais ondas (${W.length - show})</button>` : ''}`}
     ${cfgForm}
     ${(S.planHist || []).length ? `<section class="card"><header><h3>Versões anteriores</h3></header><ul class="log">${S.planHist.map((h) => `<li><time>${new Date(h.at).toLocaleDateString('pt-BR')}</time><b>v${h.v}</b> ${h.waves} ondas até ${h.end ? fmtDate(h.end) : '—'} · ${esc(h.note)}</li>`).join('')}</ul></section>` : ''}`;
 };
 
-function waveEvents() { const ev = {}; (S.plan ? S.plan.waves : []).forEach((w) => { (ev[w.ads] = ev[w.ads] || []).push({ k: 'ads', w, t: `📣 Onda ${w.i}: anúncios (${w.adRegions.join(', ')})` }); (ev[w.first] = ev[w.first] || []).push({ k: 'call', w, t: `📞 Onda ${w.i}: começam as ligações (${w.cities.slice(0, 2).map((c) => c[1]).join(', ')}${w.cities.length > 2 ? '…' : ''})` }); }); return ev; }
+function waveEvents() { const ev = {}; (S.plan ? S.plan.waves : []).forEach((w) => { (ev[w.ads] = ev[w.ads] || []).push({ k: 'ads', w, t: `📣 Onda ${w.i}: anúncios (${adNames(w).join(', ')})` }); (ev[w.first] = ev[w.first] || []).push({ k: 'call', w, t: `📞 Onda ${w.i}: começam as ligações (${w.cities.slice(0, 2).map((c) => c[1]).join(', ')}${w.cities.length > 2 ? '…' : ''})` }); }); return ev; }
 function campaignCard() {
   const p = S.plan; if (!p) return Sync.enabled() ? `<a class="camp-card empty-c" href="#/plano"><b>📣 Plano de campanhas</b><span>Toque para montar as ondas: cidades, datas dos anúncios, ligações e verba.</span></a>` : '';
   const w = currentWave(); if (!w) return ''; const nx = p.waves[p.waves.indexOf(w) + 1]; const t = todayStr();
-  const line = (x) => `<div class="cc-row"><b>Onda ${x.i} · ${x.uf}</b><span>📣 anúncios <b>${dm(x.ads)}</b> em ${esc(x.adRegions.join(', '))}</span><span>📞 ligações <b>${dm(x.first)} → ${dm(x.last)}</b> · ${x.n.toLocaleString('pt-BR')} clínicas</span></div>`;
+  const line = (x) => `<div class="cc-row"><b>Onda ${x.i} · ${x.uf}</b><span>📣 anúncios <b>${dm(x.ads)}</b> em ${esc(adNames(x).join(', '))}</span><span>📞 ligações <b>${dm(x.first)} → ${dm(x.last)}</b> · ${x.n.toLocaleString('pt-BR')} clínicas</span></div>`;
   return `<a class="camp-card" href="#/plano"><div class="cc-h"><small>CAMPANHAS · ${waveStatus(w)[1].toUpperCase()}</small><span class="link">Ver plano e metas →</span></div>${line(w)}${nx ? `<div class="cc-next">Depois:</div>${line(nx)}` : ''}${goalsHTML(true)}</a>`;
 }
 
@@ -380,7 +417,7 @@ function cronHTML() {
     for (let d = ym + '-01'; d <= end; d = addDays(d, 1)) {
       const D = days[d]; const tasks = S.tasks.filter((x) => x.planTask && x.due === d); const off = !isWorkday(d, p.cfg);
       if (!D && !tasks.length) continue;
-      const done = doneOn(d); const ads = D && D.ads.length ? D.ads.map((w) => `O${w.i}: ${w.adRegions.join(', ')}`).join(' · ') : '';
+      const done = doneOn(d); const ads = D && D.ads.length ? D.ads.map((w) => `O${w.i}: ${adNames(w).join(', ')}`).join(' · ') : '';
       rows.push(`<tr class="${d === t ? 'today' : ''} ${off ? 'off' : ''}"><th>${d.slice(8)}/${d.slice(5, 7)}<small>${WD[parseD(d).getDay()]}${HOLIDAYS.includes(d) ? ' · feriado' : ''}</small></th>
         <td data-l="Ligações">${D && D.items.length ? D.items.map((x) => `<span class="ci">O${x.w} · <b>${esc(x.city)}</b>/${x.uf} ${x.n}</span>`).join('') : off ? '<small class="muted">sem ligações</small>' : '—'}</td>
         <td data-l="Contatos">${D && D.calls ? `<b>${D.calls}</b>${d <= t ? `<small class="${done >= D.calls ? 'okc' : done ? '' : 'late'}"> feito ${done}</small>` : ''}` : '—'}</td>

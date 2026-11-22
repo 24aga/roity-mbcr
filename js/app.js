@@ -1230,6 +1230,8 @@ document.addEventListener('click', (e) => {
     impOpen: () => importForm(),
     quotaStart: () => startQuota(),
     planRe: async () => { const b = a; if (b.tagName === 'BUTTON') { b.disabled = true; b.textContent = 'Recalculando…'; } try { await genPlan('Recalculado a partir de hoje'); toast('Plano recalculado'); } catch (er) { alert('Não consegui recalcular: ' + er.message); } render(); },
+    copyAd: async () => { const w = S.plan && S.plan.waves.find((x) => x.i === +d.w); if (!w) return; const txt = adCopyText(w);
+      try { await navigator.clipboard.writeText(txt); toast(`Locais da Onda ${w.i} copiados. No Meta: Locais → Adicionar locais em massa → colar`); } catch (er) { prompt('Copie os locais:', txt.replace(/\n/g, '; ')); } },
     planEdit: () => { ui.planEdit = true; render(); const f = $('#planCfg'); if (f) { f.open = true; f.scrollIntoView({ behavior: 'smooth', block: 'start' }); setTimeout(() => f.querySelector('[name="start"]')?.focus(), 350); } ui.planEdit = false; },
     planSkipToday: async () => { const t = todayStr(); const c = { ...(S.settings.plan || {}) }; const bl = new Set(c.blocked || []); const off = bl.has(t); off ? bl.delete(t) : bl.add(t); c.blocked = [...bl].sort(); S.settings.plan = c;
       toast('Recalculando…'); try { await genPlan(off ? 'Hoje voltou a ter prospecção' : 'Hoje sem prospecção — empurrado para os próximos dias'); toast(off ? 'Hoje voltou para o plano' : 'Hoje ficou livre; o plano andou um dia'); } catch (er) { alert('Não consegui recalcular: ' + er.message); } render(); },
