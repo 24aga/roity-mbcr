@@ -616,7 +616,7 @@ VIEWS.calendario = () => {
     const ds = `${base}-${String(d).padStart(2, '0')}`; const l = byDay[ds] || [];
     const meet = l.filter((t) => t.meeting).length; const late = l.filter((t) => taskOverdue(t)).length; const wev = (window.__wev || {})[ds] || [];
     cells += `<button class="cd ${ds === today ? 'today' : ''} ${ds === sel ? 'sel' : ''}" data-act="calDay" data-d="${ds}" aria-label="${fmtDate(ds)}: ${l.length} itens">
-      <span class="dn">${d}</span>${wev.length ? `<span class="cd-w">${wev.map((x) => `<i class="${x.k}">${x.k === 'ads' ? '📣' : '📞'} O${x.w.i}</i>`).join('')}</span>` : ''}${l.length ? `<span class="cd-c">${meet ? `<i class="m">${meet} reun.</i>` : ''}<i>${l.length - meet} tarefa${l.length - meet === 1 ? '' : 's'}</i>${late ? '<i class="late">!</i>' : ''}</span>` : ''}</button>`;
+      <span class="dn">${d}</span>${wev.length ? `<span class="cd-w">${wev.map((x) => `<i class="${x.k}">${x.k === 'ads' ? '📣' : '📞'} O${x.w.i}</i>`).join('')}</span>` : ''}${l.length ? `<span class="cd-c">${meet ? `<i class="m">${meet}<span class="cl"> reun.</span></i>` : ''}${l.length - meet ? `<i>${l.length - meet}<span class="cl"> tarefa${l.length - meet === 1 ? '' : 's'}</span></i>` : ''}${late ? '<i class="late">!</i>' : ''}</span>` : ''}</button>`;
   }
   const monthName = ((x) => x.charAt(0).toUpperCase() + x.slice(1))(first.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' }));
   const selList = (byDay[sel] || []).sort((a, b) => b.meeting - a.meeting);
@@ -664,8 +664,9 @@ VIEWS.criativos = () => {
 VIEWS.relatorio = () => {
   const per = { s1: [1, 6, 'Relatório semestral'], s2: [7, 12, 'Relatório do 2º semestre'], ano: [1, 12, 'Relatório anual'] }[route.params[1]];
   if (per) { const cc = clinicById(route.params[0]); if (!cc || !cc.journey) { view().innerHTML = empty('Relatório indisponível.'); return; } return periodReport(cc, per[0], per[1], per[2]); }
-  const c = clinicById(route.params[0]); const n = +route.params[1];
+  const c = clinicById(route.params[0]);
   if (!c || !c.journey) { view().innerHTML = empty('Relatório indisponível.'); return; }
+  let n = +route.params[1]; if (!(n >= 1 && n <= 12)) n = Math.min(12, Math.max(1, currentMonth(c) || 1));
   const md = monthData(c, n);
   const done = md.tasks.filter((t) => t.status === 'concluido'); const pend = md.tasks.filter((t) => t.status !== 'concluido');
   const next = n < 12 ? monthData(c, n + 1) : null;
@@ -810,7 +811,7 @@ function propTotals(p) {
   const roity1 = price + setup;
   return { price, setup, media, roity1, plat: media, first: roity1 + (media || 0), roityN: price, next: price + (media || 0) };
 }
-const blank = (v, ph) => (v && String(v).trim() ? esc(v) : `<span class="ph">[${ph}]</span>`);
+const blank = (v, ph) => (v && String(v).trim() ? esc(v) : `<span class="phx">[${ph}]</span>`);
 function proposalDoc(c, p) {
   const t = propTotals(p); const refSum = REF_VALUES.reduce((a, r) => a + r[1], 0);
   const mediaTxt = t.media == null ? 'definida na reunião' : money(t.media);

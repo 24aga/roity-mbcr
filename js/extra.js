@@ -169,3 +169,14 @@ function lockShow() {
     if (ok) { try { sessionStorage.setItem('roity-unlocked', '1'); } catch (er) {} d.remove(); } else { $('#lockErr').hidden = false; $('#lockIn').value = ''; } });
 }
 window.addEventListener('DOMContentLoaded', lockShow);
+
+// campos de texto crescem com o conteúdo (nada de texto cortado), até 60% da tela
+(() => {
+  const skip = (ta) => ta.name === 'script' || ta.id === 'impPaste';
+  const grow = (ta) => { if (skip(ta) || !ta.isConnected) return; ta.style.height = 'auto'; const max = Math.round(window.innerHeight * 0.6); const h = Math.min(ta.scrollHeight + 2, max); if (h > 4) { ta.style.height = h + 'px'; ta.style.overflowY = ta.scrollHeight + 2 > max ? 'auto' : 'hidden'; } };
+  const all = (root) => (root.querySelectorAll ? root.querySelectorAll('textarea') : []).forEach(grow);
+  document.addEventListener('input', (e) => { if (e.target.tagName === 'TEXTAREA') grow(e.target); });
+  new MutationObserver((ms) => { let any = false; ms.forEach((m) => m.addedNodes.forEach((n) => { if (n.nodeType === 1 && (n.tagName === 'TEXTAREA' || n.querySelector && n.querySelector('textarea'))) any = true; })); if (any) requestAnimationFrame(() => all(document)); }).observe(document.body, { childList: true, subtree: true });
+  window.addEventListener('resize', () => all(document));
+  document.addEventListener('toggle', (e) => all(e.target), true);
+})();
